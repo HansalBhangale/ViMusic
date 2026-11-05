@@ -1,0 +1,25 @@
+# Node dependencies
+node_modules/
+package-lock.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+
+# Android build outputs & caches
+android/.gradle/
+android/build/
+android/app/build/
+android/capacitor-cordova-android-plugins/build/
+android/.idea/
+android/*.iml
+android/app/*.iml
+local.properties
+.gradle/
+
+# OS Files
+.DS_Store
+Thumbs.db

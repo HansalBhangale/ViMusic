@@ -1,0 +1,15 @@
+{
+  "appId": "com.vimusic.app",
+  "appName": "ViMusic",
+  "webDir": "static",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  }
+}

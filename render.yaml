@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: vimusic-engine
+    env: docker
+    plan: free
+    region: oregon
+    buildCommand: ""
+    startCommand: ""
+    envVars:
+      - key: PORT
+        value: 8000

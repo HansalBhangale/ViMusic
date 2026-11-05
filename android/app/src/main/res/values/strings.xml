@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ViMusic</string>
+    <string name="title_activity_main">ViMusic</string>
+    <string name="package_name">com.vimusic.app</string>
+    <string name="custom_url_scheme">com.vimusic.app</string>
+</resources>

@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ViMusic - Free Music Streamer & MP3</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background-color: #050507;
+      color: #f4f4f5;
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      overflow-x: hidden;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #27272a;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3f3f46;
+    }
+    .lyrics-scroll::-webkit-scrollbar {
+      display: none;
+    }
+    .lyrics-scroll {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .lyric-line {
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+    }
+    .lyric-active {
+      color: #ffffff !important;
+      font-weight: 800 !important;
+      font-size: 1.35rem !important;
+      transform: scale(1.03);
+      text-shadow: 0 0 25px rgba(239, 68, 68, 0.6);
+    }
+    .range-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      background: #27272a;
+      border-radius: 9999px;
+      outline: none;
+    }
+    .range-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ef4444;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    .range-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.3);
+    }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.3; transform: scale(1); }
+      50% { opacity: 0.55; transform: scale(1.05); }
+    }
+    .ambient-glow {
+      animation: pulseGlow 6s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-red-500 selection:text-white">
+
+  <!-- Background Ambient Glow -->
+  <div id="ambient-bg" class="fixed -top-40 -left-40 w-96 h-96 bg-red-600/15 rounded-full blur-[140px] pointer-events-none ambient-glow z-0"></div>
+  <div class="fixed top-1/2 -right-40 w-96 h-96 bg-rose-600/10 rounded-full blur-[140px] pointer-events-none ambient-glow z-0"></div>
+
+  <!-- Audio Element -->
+  <audio id="audio-engine" preload="metadata"></audio>
+
+  <!-- Top App Navigation Bar -->
+  <header class="border-b border-zinc-800/80 bg-zinc-950/70 backdrop-blur-xl sticky top-0 z-30 px-6 py-3.5">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('explore')">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-red-600 to-rose-500 flex items-center justify-center font-black text-white shadow-lg shadow-red-500/25">
+          <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <h1 class="text-base font-extrabold tracking-tight">ViMusic</h1>
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 uppercase tracking-wide">Free</span>
+          </div>
+          <p class="text-[11px] text-zinc-400 font-medium">YouTube Audio & MP3 Engine</p>
+        </div>
+      </div>
+
+      <!-- Main Navigation Tabs -->
+      <nav class="flex items-center gap-1 bg-zinc-900/80 border border-zinc-800/80 p-1 rounded-xl">
+        <button id="nav-explore" onclick="switchTab('explore')" class="nav-tab px-4 py-1.5 rounded-lg text-xs font-semibold transition-all bg-zinc-800 text-white shadow-sm flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+          <span>Explore</span>
+        </button>
+        <button id="nav-search" onclick="switchTab('search')" class="nav-tab px-4 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white transition-all flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <span>Search</span>
+        </button>
+        <button id="nav-library" onclick="switchTab('library')" class="nav-tab px-4 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white transition-all flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"/></svg>
+          <span>Library</span>
+        </button>
+        <button id="nav-queue" onclick="switchTab('queue')" class="nav-tab px-4 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white transition-all flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          <span>Queue <span id="queue-badge" class="ml-1 px-1.5 py-0.2 bg-red-600/30 text-red-400 text-[10px] rounded-full">0</span></span>
+        </button>
+      </nav>
+
+      <!-- Right Actions: Server Config, Sleep Timer & Status -->
+      <div class="flex items-center gap-2">
+        <button onclick="openServerConfigModal()" id="server-btn" class="text-xs bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5" title="Cloud Server URL">
+          <svg class="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
+          <span id="server-label">Server</span>
+        </button>
+        <button onclick="openSleepTimerModal()" id="sleep-timer-btn" class="text-xs bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5" title="Sleep Timer">
+          <svg class="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span id="sleep-timer-label">Sleep Timer</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Main View Container -->
+  <main class="max-w-7xl w-full mx-auto p-6 flex-1 flex flex-col pb-32 z-10">
+
+    <!-- 1. EXPLORE TAB -->
+    <section id="tab-explore" class="tab-content flex flex-col gap-8">
+      
+      <!-- Welcome Hero Banner -->
+      <div class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-red-950/40 via-zinc-900/60 to-zinc-950 border border-red-500/20 p-8 shadow-xl">
+        <div class="max-w-xl">
+          <span class="text-xs uppercase font-extrabold tracking-widest text-red-400 bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">Free & Uncapped Streaming</span>
+          <h2 class="text-3xl font-extrabold mt-3 tracking-tight text-white">Stream Any Song from YouTube Ad-Free.</h2>
+          <p class="text-sm text-zinc-400 mt-2 leading-relaxed">High-bitrate AAC pure audio streaming, instant scrub seeking, 1-click MP3 downloads with embedded ID3 metadata, and real-time synchronized karaoke lyrics.</p>
+          <div class="flex items-center gap-3 mt-5">
+            <button onclick="switchTab('search')" class="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-red-600/30 transition flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              <span>Search Catalog</span>
+            </button>
+            <button onclick="playTopTrendingTrack()" class="bg-zinc-800/80 hover:bg-zinc-800 text-zinc-200 font-semibold text-xs px-5 py-2.5 rounded-xl transition flex items-center gap-2">
+              <svg class="w-4 h-4 fill-current text-red-500" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <span>Play #1 Trending Song</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Recommendations for Currently Playing Track (YouTube Music Radio) -->
+      <div id="recommended-next-section" class="hidden flex flex-col gap-3 bg-zinc-900/40 border border-zinc-800/60 rounded-3xl p-5 shadow-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
+              <span>Up Next Recommendations</span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 uppercase tracking-wider">YT Music Radio Mix</span>
+            </h3>
+            <p id="recommended-next-subtitle" class="text-xs text-zinc-400 mt-0.5">Top algorithmic picks similar to your current track</p>
+          </div>
+          <button onclick="queueAllRecommendations()" class="text-xs bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-semibold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <span>Queue All</span>
+          </button>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 mt-1" id="recommended-next-container">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Quick Picks Grid -->
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="text-lg font-bold text-white tracking-tight">Quick Picks</h3>
+            <p class="text-xs text-zinc-400">Popular hits ready to stream instantly</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4" id="quick-picks-container">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Moods & Genres -->
+      <div>
+        <h3 class="text-lg font-bold text-white tracking-tight mb-4">Moods & Genres</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+          <div onclick="searchGenre('Chill Lofi Beats')" class="cursor-pointer bg-gradient-to-br from-indigo-950/60 to-zinc-900 border border-indigo-500/20 hover:border-indigo-500/40 p-4 rounded-2xl transition hover:scale-[1.02]">
+            <span class="text-xl">🌙</span>
+            <h4 class="font-bold text-sm text-white mt-2">Chill & Relax</h4>
+            <p class="text-[11px] text-zinc-400">Lofi, ambient & soothing</p>
+          </div>
+          <div onclick="searchGenre('Workout Hype Music')" class="cursor-pointer bg-gradient-to-br from-red-950/60 to-zinc-900 border border-red-500/20 hover:border-red-500/40 p-4 rounded-2xl transition hover:scale-[1.02]">
+            <span class="text-xl">⚡</span>
+            <h4 class="font-bold text-sm text-white mt-2">Workout & Gym</h4>
+            <p class="text-[11px] text-zinc-400">High energy beats & bass</p>
+          </div>
+          <div onclick="searchGenre('Bollywood Romantic Songs')" class="cursor-pointer bg-gradient-to-br from-rose-950/60 to-zinc-900 border border-rose-500/20 hover:border-rose-500/40 p-4 rounded-2xl transition hover:scale-[1.02]">
+            <span class="text-xl">❤️</span>
+            <h4 class="font-bold text-sm text-white mt-2">Bollywood Romance</h4>
+            <p class="text-[11px] text-zinc-400">Pritam, Arijit, Shafqat</p>
+          </div>
+          <div onclick="searchGenre('Focus Deep Work Study Music')" class="cursor-pointer bg-gradient-to-br from-emerald-950/60 to-zinc-900 border border-emerald-500/20 hover:border-emerald-500/40 p-4 rounded-2xl transition hover:scale-[1.02]">
+            <span class="text-xl">🧠</span>
+            <h4 class="font-bold text-sm text-white mt-2">Deep Focus</h4>
+            <p class="text-[11px] text-zinc-400">Instrumentals & study tracks</p>
+          </div>
+          <div onclick="searchGenre('Top Global Pop Hits 2026')" class="cursor-pointer bg-gradient-to-br from-amber-950/60 to-zinc-900 border border-amber-500/20 hover:border-amber-500/40 p-4 rounded-2xl transition hover:scale-[1.02]">
+            <span class="text-xl">🔥</span>
+            <h4 class="font-bold text-sm text-white mt-2">Global Pop Hits</h4>
+            <p class="text-[11px] text-zinc-400">Trending chart toppers</p>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 2. SEARCH TAB -->
+    <section id="tab-search" class="tab-content hidden flex flex-col gap-6">
+      
+      <!-- Search Input Form -->
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-5 shadow-lg">
+        <form id="search-form" class="flex gap-2.5">
+          <div class="relative flex-1">
+            <svg class="w-5 h-5 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input 
+              type="text" 
+              id="search-input" 
+              placeholder="Search song, artist, album, or paste a YouTube URL..." 
+              class="w-full bg-zinc-950 border border-zinc-700/60 rounded-2xl pl-12 pr-4 py-3.5 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500 transition shadow-inner"
+            />
+          </div>
+          <button 
+            type="submit" 
+            class="bg-red-600 hover:bg-red-500 text-white font-semibold text-sm px-7 py-3.5 rounded-2xl transition shadow-lg shadow-red-600/25 flex items-center gap-2"
+          >
+            <span>Search</span>
+          </button>
+        </form>
+
+        <!-- Fast Filter Chips -->
+        <div class="flex flex-wrap gap-2 mt-4 pt-3 border-t border-zinc-800/60 text-xs text-zinc-400">
+          <span class="self-center font-bold text-zinc-500 uppercase tracking-wider text-[10px]">Trending Topics:</span>
+          <button onclick="runSearch('Trending Viral Songs')" class="bg-zinc-800/60 hover:bg-zinc-800 px-3 py-1 rounded-xl transition">Trending Viral</button>
+          <button onclick="runSearch('Global Top Hits 2026')" class="bg-zinc-800/60 hover:bg-zinc-800 px-3 py-1 rounded-xl transition">Global Top Hits</button>
+          <button onclick="runSearch('Bollywood Hits 2026')" class="bg-zinc-800/60 hover:bg-zinc-800 px-3 py-1 rounded-xl transition">Bollywood Hits</button>
+          <button onclick="runSearch('Chill Acoustic Songs')" class="bg-zinc-800/60 hover:bg-zinc-800 px-3 py-1 rounded-xl transition">Chill Acoustic</button>
+          <button onclick="runSearch('Hip Hop Bangers')" class="bg-zinc-800/60 hover:bg-zinc-800 px-3 py-1 rounded-xl transition">Hip Hop</button>
+          <button onclick="runSearch('Lofi Study Beats')" class="bg-zinc-800/60 hover:bg-zinc-800 px-3 py-1 rounded-xl transition">Lofi Beats</button>
+        </div>
+      </div>
+
+      <!-- Search Results Area -->
+      <div class="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-6 flex flex-col">
+        <div class="flex items-center justify-between pb-4 mb-3 border-b border-zinc-800 text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+          <span id="search-results-heading">Search Results</span>
+          <span id="search-results-count" class="text-zinc-500">0 found</span>
+        </div>
+
+        <div id="search-results-list" class="flex flex-col gap-2 min-h-[300px]">
+          <div class="text-center py-20 text-zinc-500 text-sm">
+            Enter a song title or artist above to search and stream.
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 3. LIBRARY TAB -->
+    <section id="tab-library" class="tab-content hidden flex flex-col gap-8">
+      
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-extrabold text-white tracking-tight">Your Music Library</h2>
+          <p class="text-xs text-zinc-400">Playlists, favorites, and history stored locally in your browser</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="openCreatePlaylistModal()" class="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-red-600/20">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <span>Create Playlist</span>
+          </button>
+          <button onclick="exportLibrary()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs px-3 py-2 rounded-xl transition" title="Export Backup JSON">
+            Export Backup
+          </button>
+          <label class="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs px-3 py-2 rounded-xl transition cursor-pointer" title="Import Backup JSON">
+            Import Backup
+            <input type="file" id="import-input" accept=".json" class="hidden" onchange="importLibrary(event)">
+          </label>
+        </div>
+      </div>
+
+      <!-- Library Sections Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <!-- Liked Songs Tile -->
+        <div onclick="showLikedSongsView()" class="cursor-pointer group relative overflow-hidden bg-gradient-to-br from-rose-900/40 via-red-950/30 to-zinc-900 border border-red-500/20 hover:border-red-500/40 rounded-3xl p-6 transition flex flex-col justify-between shadow-lg">
+          <div>
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-red-600 to-rose-500 flex items-center justify-center text-white shadow-md shadow-red-600/30">
+              <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            </div>
+            <h3 class="text-xl font-bold text-white mt-4 tracking-tight">Liked Songs</h3>
+            <p id="liked-songs-count" class="text-xs text-zinc-400 mt-1">0 tracks favorited</p>
+          </div>
+          <div class="mt-6 flex items-center justify-between text-xs text-red-400 font-semibold">
+            <span>View Favorites</span>
+            <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </div>
+        </div>
+
+        <!-- Custom Playlists Tile -->
+        <div onclick="showPlaylistsView()" class="cursor-pointer group relative overflow-hidden bg-zinc-900/60 border border-zinc-800 hover:border-zinc-700 rounded-3xl p-6 transition flex flex-col justify-between shadow-lg">
+          <div>
+            <div class="w-12 h-12 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-200">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+            </div>
+            <h3 class="text-xl font-bold text-white mt-4 tracking-tight">Custom Playlists</h3>
+            <p id="playlists-count" class="text-xs text-zinc-400 mt-1">0 playlists created</p>
+          </div>
+          <div class="mt-6 flex items-center justify-between text-xs text-zinc-400 group-hover:text-white font-semibold">
+            <span>Manage Playlists</span>
+            <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </div>
+        </div>
+
+        <!-- Listening History Tile -->
+        <div onclick="showHistoryView()" class="cursor-pointer group relative overflow-hidden bg-zinc-900/60 border border-zinc-800 hover:border-zinc-700 rounded-3xl p-6 transition flex flex-col justify-between shadow-lg">
+          <div>
+            <div class="w-12 h-12 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-200">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <h3 class="text-xl font-bold text-white mt-4 tracking-tight">Listening History</h3>
+            <p id="history-count" class="text-xs text-zinc-400 mt-1">0 songs played</p>
+          </div>
+          <div class="mt-6 flex items-center justify-between text-xs text-zinc-400 group-hover:text-white font-semibold">
+            <span>View Recent</span>
+            <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Library Detail Content Container -->
+      <div id="library-detail-container" class="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-6 flex flex-col">
+        <!-- Rendered dynamically -->
+      </div>
+
+    </section>
+
+    <!-- 4. QUEUE TAB -->
+    <section id="tab-queue" class="tab-content hidden flex flex-col gap-6">
+      
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-extrabold text-white tracking-tight">Playing Queue</h2>
+          <p class="text-xs text-zinc-400">Manage upcoming songs and toggle endless autoplay radio</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <!-- Autoplay Radio Toggle -->
+          <label class="flex items-center gap-2 cursor-pointer bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl text-xs font-semibold text-zinc-300">
+            <span>Start Radio (Autoplay)</span>
+            <input type="checkbox" id="autoplay-radio-toggle" checked onchange="toggleAutoplayRadio(this.checked)" class="accent-red-600 w-4 h-4 rounded">
+          </label>
+          <button onclick="clearQueue()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs px-3 py-1.5 rounded-xl transition">
+            Clear Queue
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-6 flex flex-col">
+        <div id="queue-list" class="flex flex-col gap-2 min-h-[300px]">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- BOTTOM FLOATING MINI PLAYER -->
+  <footer id="mini-player" class="fixed bottom-4 left-4 right-4 max-w-5xl mx-auto z-40 bg-zinc-950/90 border border-zinc-800/90 rounded-2xl p-3 shadow-2xl backdrop-blur-2xl flex flex-col gap-2">
+    
+    <!-- Top Progress Scrub Line -->
+    <div class="flex items-center gap-2 px-1">
+      <span id="current-time-label" class="text-[10px] font-mono text-zinc-400 w-8 text-right">0:00</span>
+      <input 
+        type="range" 
+        id="seek-bar" 
+        min="0" 
+        max="100" 
+        value="0" 
+        step="0.1" 
+        class="range-slider w-full h-1 cursor-pointer"
+      />
+      <span id="duration-label" class="text-[10px] font-mono text-zinc-400 w-8">0:00</span>
+    </div>
+
+    <!-- Main Player Controls Row -->
+    <div class="flex items-center justify-between gap-4">
+      
+      <!-- Track Thumbnail & Title (Click expands fullscreen) -->
+      <div class="flex items-center gap-3 flex-1 min-w-0 cursor-pointer" onclick="openFullscreenPlayer()">
+        <div class="relative w-12 h-12 rounded-xl overflow-hidden bg-zinc-900 flex-shrink-0 border border-zinc-800">
+          <img id="mini-thumb" src="" alt="Album Art" class="w-full h-full object-cover hidden" />
+          <div id="mini-thumb-placeholder" class="w-full h-full flex items-center justify-center text-zinc-600">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+          </div>
+        </div>
+        <div class="min-w-0 flex-1">
+          <h4 id="mini-title" class="text-sm font-bold text-white truncate">Not Playing</h4>
+          <p id="mini-artist" class="text-xs text-zinc-400 truncate">Select a song to start</p>
+        </div>
+      </div>
+
+      <!-- Center Playback Controls -->
+      <div class="flex items-center gap-3">
+        <!-- Like Button -->
+        <button id="mini-like-btn" onclick="toggleLikeCurrentTrack()" class="text-zinc-400 hover:text-red-500 transition p-2" title="Favorite">
+          <svg id="mini-like-icon" class="w-5 h-5 fill-none stroke-current stroke-2" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        </button>
+
+        <!-- Shuffle -->
+        <button id="shuffle-btn" onclick="toggleShuffle()" class="text-zinc-500 hover:text-white transition p-1.5" title="Shuffle">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h4l4 6 4-6h4M4 20h4l4-6 4 6h4M16 4h4v4M16 20h4v-4"/></svg>
+        </button>
+
+        <!-- Previous -->
+        <button onclick="playPrevious()" class="text-zinc-300 hover:text-white transition p-1.5" title="Previous">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+        </button>
+
+        <!-- Play / Pause Main Button -->
+        <button id="main-play-btn" onclick="togglePlay()" class="w-10 h-10 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition shadow-lg shadow-red-600/30">
+          <svg id="play-icon" class="w-5 h-5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg id="pause-icon" class="w-5 h-5 fill-current hidden" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+
+        <!-- Next -->
+        <button onclick="playNext()" class="text-zinc-300 hover:text-white transition p-1.5" title="Next">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+        </button>
+
+        <!-- Repeat -->
+        <button id="repeat-btn" onclick="toggleRepeat()" class="text-zinc-500 hover:text-white transition p-1.5" title="Repeat">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
+      </div>
+
+      <!-- Right Utility Actions -->
+      <div class="flex items-center gap-2">
+        
+        <!-- Volume Slider -->
+        <div class="hidden sm:flex items-center gap-1.5">
+          <button onclick="toggleMute()" class="text-zinc-400 hover:text-white transition p-1">
+            <svg id="vol-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+          </button>
+          <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="1" class="range-slider w-16 h-1 cursor-pointer">
+        </div>
+
+        <!-- Download MP3 -->
+        <button id="mini-download-btn" onclick="downloadCurrentTrack()" class="text-zinc-400 hover:text-white p-2 rounded-lg hover:bg-zinc-800 transition" title="Download MP3 with ID3 Tags">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        </button>
+
+        <!-- Expand Button -->
+        <button onclick="openFullscreenPlayer()" class="text-zinc-400 hover:text-white p-2 rounded-lg hover:bg-zinc-800 transition" title="Fullscreen Player">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+        </button>
+
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- FULLSCREEN NOW PLAYING MODAL -->
+  <div id="fullscreen-modal" class="fixed inset-0 z-50 bg-black/95 backdrop-blur-2xl hidden flex flex-col justify-between p-6 md:p-10 transition-all duration-300">
+    
+    <!-- Top Modal Bar -->
+    <div class="flex items-center justify-between max-w-4xl w-full mx-auto">
+      <button onclick="closeFullscreenPlayer()" class="text-zinc-400 hover:text-white p-2.5 rounded-full hover:bg-zinc-800 transition">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+
+      <!-- Center Switcher: Cover vs Lyrics vs Queue vs Similar -->
+      <div class="flex items-center gap-1 bg-zinc-900 border border-zinc-800 p-1 rounded-xl">
+        <button id="fs-view-cover-btn" onclick="setFsView('cover')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 text-white transition">Cover</button>
+        <button id="fs-view-lyrics-btn" onclick="setFsView('lyrics')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white transition">Lyrics</button>
+        <button id="fs-view-queue-btn" onclick="setFsView('queue')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white transition">Queue</button>
+        <button id="fs-view-radio-btn" onclick="setFsView('radio')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white transition flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 text-red-500 fill-current" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+          <span>Recommended</span>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <!-- Playback speed -->
+        <select id="fs-speed-select" onchange="setPlaybackRate(this.value)" class="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs px-2.5 py-1.5 rounded-xl outline-none">
+          <option value="0.75">0.75x</option>
+          <option value="1.0" selected>1.0x</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+          <option value="2.0">2.0x</option>
+        </select>
+        <button onclick="openSleepTimerModal()" class="text-zinc-400 hover:text-white p-2 rounded-xl hover:bg-zinc-800 transition" title="Sleep Timer">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Center Content: Cover View OR Synced Lyrics View OR Queue View -->
+    <div class="flex-1 max-w-4xl w-full mx-auto my-6 flex items-center justify-center overflow-hidden">
+      
+      <!-- View A: Big Cover Art -->
+      <div id="fs-cover-view" class="flex flex-col items-center justify-center w-full">
+        <div class="relative w-72 h-72 sm:w-84 sm:h-84 md:w-96 md:h-96 rounded-3xl overflow-hidden shadow-2xl shadow-red-900/20 border border-zinc-800/80 bg-zinc-900">
+          <img id="fs-thumb" src="" alt="Album Artwork" class="w-full h-full object-cover hidden" />
+          <div id="fs-thumb-placeholder" class="w-full h-full flex items-center justify-center text-zinc-700">
+            <svg class="w-20 h-20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- View B: Synced Lyrics Container -->
+      <div id="fs-lyrics-view" class="hidden w-full h-full flex flex-col justify-center items-center text-center">
+        <div id="fs-lyrics-scroll" class="lyrics-scroll w-full h-full overflow-y-auto px-4 py-16 flex flex-col gap-5 text-center">
+          <p class="text-zinc-500 text-sm my-auto">Lyrics will appear here during playback.</p>
+        </div>
+      </div>
+
+      <!-- View C: Queue View -->
+      <div id="fs-queue-view" class="hidden w-full h-full flex flex-col overflow-y-auto pr-2">
+        <div id="fs-queue-list" class="flex flex-col gap-2"></div>
+      </div>
+
+      <!-- View D: Recommendations (YouTube Music Radio) View -->
+      <div id="fs-radio-view" class="hidden w-full h-full flex flex-col overflow-y-auto pr-2">
+        <div class="flex items-center justify-between pb-3 mb-2 border-b border-zinc-800">
+          <div>
+            <h4 class="text-xs font-bold text-white uppercase tracking-wider">Similar & Recommended Songs</h4>
+            <p id="fs-radio-subtitle" class="text-[11px] text-zinc-400">Algorithmic radio picks based on current track</p>
+          </div>
+          <button onclick="queueAllRecommendations()" class="text-xs bg-red-600/30 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/40 font-semibold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <span>Queue All</span>
+          </button>
+        </div>
+        <div id="fs-radio-list" class="flex flex-col gap-2">
+          <p class="text-zinc-500 text-xs py-8 text-center">Loading recommendations...</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom Controls in Fullscreen -->
+    <div class="max-w-4xl w-full mx-auto flex flex-col gap-4">
+      
+      <!-- Title & Like -->
+      <div class="flex items-center justify-between">
+        <div class="min-w-0 flex-1 pr-4">
+          <h2 id="fs-title" class="text-xl sm:text-2xl font-black text-white truncate">Ready to Play</h2>
+          <p id="fs-artist" class="text-sm text-zinc-400 mt-1 truncate">Select a song</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="fs-like-btn" onclick="toggleLikeCurrentTrack()" class="p-3 text-zinc-400 hover:text-red-500 transition">
+            <svg id="fs-like-icon" class="w-7 h-7 fill-none stroke-current stroke-2" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+          </button>
+          <button onclick="downloadCurrentTrack()" class="p-3 text-zinc-400 hover:text-white transition" title="Download MP3">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Scrub Slider -->
+      <div class="flex flex-col gap-1">
+        <input 
+          type="range" 
+          id="fs-seek-bar" 
+          min="0" 
+          max="100" 
+          value="0" 
+          step="0.1" 
+          class="range-slider w-full h-1.5 cursor-pointer"
+        />
+        <div class="flex justify-between text-xs font-mono text-zinc-400">
+          <span id="fs-time-current">0:00</span>
+          <span id="fs-time-duration">0:00</span>
+        </div>
+      </div>
+
+      <!-- Playback Actions -->
+      <div class="flex items-center justify-center gap-6 sm:gap-10 mt-2">
+        <button onclick="toggleShuffle()" class="text-zinc-500 hover:text-white transition p-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h4l4 6 4-6h4M4 20h4l4-6 4 6h4M16 4h4v4M16 20h4v-4"/></svg>
+        </button>
+        <button onclick="playPrevious()" class="text-zinc-200 hover:text-white transition p-3">
+          <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+        </button>
+        <button onclick="togglePlay()" class="w-16 h-16 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition shadow-xl shadow-red-600/30">
+          <svg id="fs-play-icon" class="w-8 h-8 fill-current ml-1" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg id="fs-pause-icon" class="w-8 h-8 fill-current hidden" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+        <button onclick="playNext()" class="text-zinc-200 hover:text-white transition p-3">
+          <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+        </button>
+        <button onclick="toggleRepeat()" class="text-zinc-500 hover:text-white transition p-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- CREATE PLAYLIST MODAL -->
+  <div id="playlist-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full flex flex-col gap-4 shadow-2xl">
+      <h3 class="text-lg font-bold text-white">Create New Playlist</h3>
+      <input type="text" id="playlist-name-input" placeholder="Playlist title..." class="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-red-500">
+      <div class="flex justify-end gap-2 mt-2">
+        <button onclick="closeCreatePlaylistModal()" class="px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-white">Cancel</button>
+        <button onclick="saveNewPlaylist()" class="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs px-5 py-2 rounded-xl transition">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLEEP TIMER MODAL -->
+  <div id="sleep-timer-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full flex flex-col gap-4 shadow-2xl text-center">
+      <h3 class="text-lg font-bold text-white">Sleep Timer</h3>
+      <p class="text-xs text-zinc-400">Audio will automatically pause after the chosen duration.</p>
+      
+      <div class="flex flex-col gap-2 mt-2 text-xs font-semibold">
+        <button onclick="setSleepTimer(15)" class="bg-zinc-800 hover:bg-red-600 hover:text-white py-2.5 rounded-xl transition">15 Minutes</button>
+        <button onclick="setSleepTimer(30)" class="bg-zinc-800 hover:bg-red-600 hover:text-white py-2.5 rounded-xl transition">30 Minutes</button>
+        <button onclick="setSleepTimer(45)" class="bg-zinc-800 hover:bg-red-600 hover:text-white py-2.5 rounded-xl transition">45 Minutes</button>
+        <button onclick="setSleepTimer(60)" class="bg-zinc-800 hover:bg-red-600 hover:text-white py-2.5 rounded-xl transition">60 Minutes</button>
+        <button onclick="setSleepTimer('end_of_track')" class="bg-zinc-800 hover:bg-red-600 hover:text-white py-2.5 rounded-xl transition">End of Current Track</button>
+        <button onclick="cancelSleepTimer()" class="bg-zinc-950 text-zinc-400 hover:text-red-400 py-2.5 rounded-xl transition mt-1">Turn Off Timer</button>
+      </div>
+
+      <button onclick="closeSleepTimerModal()" class="text-xs text-zinc-500 hover:text-zinc-300 mt-2">Close</button>
+    </div>
+  </div>
+
+  <!-- SERVER CONFIG MODAL -->
+  <div id="server-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 max-w-md w-full flex flex-col gap-4 shadow-2xl">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-red-600/20 text-red-400 flex items-center justify-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-white">Backend Server URL</h3>
+          <p class="text-xs text-zinc-400">Configure your cloud or local streaming engine</p>
+        </div>
+      </div>
+      
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-semibold text-zinc-300">Server API URL</label>
+        <input type="text" id="server-url-input" placeholder="e.g. https://my-vimusic.onrender.com or http://10.208.66.48:8000" class="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-red-500">
+        <p class="text-[11px] text-zinc-500">For Native Android APK: Enter your free Render/Railway URL or local Wi-Fi IP so the phone can reach the engine.</p>
+      </div>
+
+      <div class="flex justify-between items-center mt-2">
+        <button onclick="resetServerUrl()" class="text-xs text-zinc-500 hover:text-zinc-300">Reset Default</button>
+        <div class="flex gap-2">
+          <button onclick="closeServerConfigModal()" class="px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-white">Cancel</button>
+          <button onclick="saveServerUrl()" class="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs px-5 py-2 rounded-xl transition">Save & Connect</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- APP STATE SCRIPT -->
+  <script>
+    // Audio engine & DOM elements
+    const audio = document.getElementById('audio-engine');
+    const miniThumb = document.getElementById('mini-thumb');
+    const miniThumbPlaceholder = document.getElementById('mini-thumb-placeholder');
+    const miniTitle = document.getElementById('mini-title');
+    const miniArtist = document.getElementById('mini-artist');
+    const playIcon = document.getElementById('play-icon');
+    const pauseIcon = document.getElementById('pause-icon');
+    const fsPlayIcon = document.getElementById('fs-play-icon');
+    const fsPauseIcon = document.getElementById('fs-pause-icon');
+    const seekBar = document.getElementById('seek-bar');
+    const fsSeekBar = document.getElementById('fs-seek-bar');
+    const currentTimeLabel = document.getElementById('current-time-label');
+    const durationLabel = document.getElementById('duration-label');
+    const fsTimeCurrent = document.getElementById('fs-time-current');
+    const fsTimeDuration = document.getElementById('fs-time-duration');
+    const volumeSlider = document.getElementById('volume-slider');
+
+    // Fullscreen Elements
+    const fsModal = document.getElementById('fullscreen-modal');
+    const fsThumb = document.getElementById('fs-thumb');
+    const fsThumbPlaceholder = document.getElementById('fs-thumb-placeholder');
+    const fsTitle = document.getElementById('fs-title');
+    const fsArtist = document.getElementById('fs-artist');
+    const fsCoverView = document.getElementById('fs-cover-view');
+    const fsLyricsView = document.getElementById('fs-lyrics-view');
+    const fsQueueView = document.getElementById('fs-queue-view');
+    const fsLyricsScroll = document.getElementById('fs-lyrics-scroll');
+
+    // Dynamic API URL for Web, Mobile, and Cloud Backends
+    function getApiBaseUrl() {
+      const custom = localStorage.getItem('vimusic_custom_server');
+      if (custom && custom.trim()) return custom.trim().replace(/\/$/, '');
+      if (window.location.protocol.startsWith('http') && !window.location.origin.includes('capacitor:')) {
+        return window.location.origin;
+      }
+      return 'http://10.208.66.48:8000';
+    }
+
+    function apiUrl(path) {
+      const base = getApiBaseUrl();
+      const p = path.startsWith('/') ? path : '/' + path;
+      return `${base}${p}`;
+    }
+
+    function openServerConfigModal() {
+      document.getElementById('server-modal').classList.remove('hidden');
+      document.getElementById('server-url-input').value = localStorage.getItem('vimusic_custom_server') || '';
+    }
+    function closeServerConfigModal() {
+      document.getElementById('server-modal').classList.add('hidden');
+    }
+    function saveServerUrl() {
+      const val = document.getElementById('server-url-input').value.trim();
+      if (val) {
+        localStorage.setItem('vimusic_custom_server', val);
+      } else {
+        localStorage.removeItem('vimusic_custom_server');
+      }
+      closeServerConfigModal();
+      alertToast('Server URL updated! Reloading...');
+      setTimeout(() => location.reload(), 600);
+    }
+    function resetServerUrl() {
+      localStorage.removeItem('vimusic_custom_server');
+      document.getElementById('server-url-input').value = '';
+      closeServerConfigModal();
+      alertToast('Server URL reset to default!');
+      setTimeout(() => location.reload(), 600);
+    }
+
+    // Storage state
+    let state = {
+      queue: [],
+      currentIndex: -1,
+      isPlaying: false,
+      isShuffle: false,
+      repeatMode: 'off', // 'off' | 'all' | 'one'
+      autoplayRadio: true,
+      likedSongs: JSON.parse(localStorage.getItem('vimusic_liked') || '[]'),
+      playlists: JSON.parse(localStorage.getItem('vimusic_playlists') || '[]'),
+      history: JSON.parse(localStorage.getItem('vimusic_history') || '[]'),
+    };
+
+    let parsedLyrics = [];
+    let sleepTimerTimeout = null;
+    let sleepTimerEndTimestamp = null;
+    let dynamicTrendingTracks = [];
+
+    // Initialization
+    window.addEventListener('DOMContentLoaded', () => {
+      loadDynamicQuickPicks();
+      updateLibraryCounts();
+      showLikedSongsView();
+      initMediaSession();
+
+      // Seek Bar
+      seekBar.addEventListener('input', (e) => {
+        if (audio.duration) {
+          audio.currentTime = (e.target.value / 100) * audio.duration;
+        }
+      });
+      fsSeekBar.addEventListener('input', (e) => {
+        if (audio.duration) {
+          audio.currentTime = (e.target.value / 100) * audio.duration;
+        }
+      });
+
+      // Volume
+      volumeSlider.addEventListener('input', (e) => {
+        audio.volume = parseFloat(e.target.value);
+      });
+
+      // Search input enter
+      document.getElementById('search-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const q = document.getElementById('search-input').value.trim();
+        if (q) runSearch(q);
+      });
+    });
+
+    // Tab Switching
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.nav-tab').forEach(el => {
+        el.classList.remove('bg-zinc-800', 'text-white', 'shadow-sm');
+        el.classList.add('text-zinc-400');
+      });
+
+      const activeSection = document.getElementById(`tab-${tabId}`);
+      const activeNav = document.getElementById(`nav-${tabId}`);
+      if (activeSection) activeSection.classList.remove('hidden');
+      if (activeNav) {
+        activeNav.classList.add('bg-zinc-800', 'text-white', 'shadow-sm');
+        activeNav.classList.remove('text-zinc-400');
+      }
+
+      if (tabId === 'queue') renderQueueView();
+      if (tabId === 'library') updateLibraryCounts();
+    }
+
+    // Dynamic Quick Picks (Fetched live from YouTube Trending & Listening Habits)
+    async function loadDynamicQuickPicks() {
+      const container = document.getElementById('quick-picks-container');
+      container.innerHTML = `
+        <div class="col-span-full flex items-center justify-center py-12 text-zinc-500 text-xs gap-2">
+          <svg class="animate-spin h-4 w-4 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span>Loading live trending songs from YouTube...</span>
+        </div>
+      `;
+
+      try {
+        let tracks = [];
+        // If user has listening history, prioritize recommendations based on recent taste
+        if (state.history.length > 0) {
+          const recent = state.history[0];
+          const res = await fetch(apiUrl(`/api/radio/${recent.id}?title=${encodeURIComponent(recent.title)}&artist=${encodeURIComponent(recent.artist)}`));
+          tracks = await res.json();
+        }
+
+        // If no history or radio returned few tracks, fetch live YouTube global trending
+        if (!tracks || tracks.length < 6) {
+          const res = await fetch(apiUrl('/api/trending'));
+          tracks = await res.json();
+        }
+
+        dynamicTrendingTracks = tracks;
+        renderDynamicQuickPicksList(tracks);
+      } catch (err) {
+        container.innerHTML = `<p class="col-span-full text-center py-8 text-zinc-500 text-xs">Could not load live recommendations. Use Search to explore.</p>`;
+      }
+    }
+
+    function renderDynamicQuickPicksList(tracks) {
+      const container = document.getElementById('quick-picks-container');
+      container.innerHTML = '';
+      tracks.slice(0, 12).forEach(track => {
+        const div = document.createElement('div');
+        div.className = "cursor-pointer group bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 rounded-2xl p-3 flex flex-col gap-2 transition hover:scale-[1.02] shadow-sm";
+        div.innerHTML = `
+          <div class="relative w-full aspect-square rounded-xl overflow-hidden bg-zinc-950">
+            <img src="${track.thumbnail}" alt="" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+              <div class="w-10 h-10 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg">
+                <svg class="w-5 h-5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </div>
+            </div>
+          </div>
+          <h4 class="text-xs font-bold text-white truncate mt-1">${track.title}</h4>
+          <p class="text-[11px] text-zinc-400 truncate">${track.artist}</p>
+        `;
+        div.addEventListener('click', () => {
+          playTrack(track);
+        });
+        container.appendChild(div);
+      });
+    }
+
+    function searchGenre(genre) {
+      switchTab('search');
+      document.getElementById('search-input').value = genre;
+      runSearch(genre);
+    }
+
+    async function playTopTrendingTrack() {
+      if (dynamicTrendingTracks.length > 0) {
+        playTrack(dynamicTrendingTracks[0]);
+      } else {
+        try {
+          const res = await fetch(apiUrl('/api/trending'));
+          const tracks = await res.json();
+          if (tracks.length > 0) {
+            dynamicTrendingTracks = tracks;
+            playTrack(tracks[0]);
+          }
+        } catch (err) {
+          console.log('Trending play error:', err);
+        }
+      }
+    }
+
+    // Search Engine
+    let currentSearchQuery = '';
+    let currentSearchLimit = 35;
+
+    async function runSearch(query, autoPlayFirst = false) {
+      switchTab('search');
+      currentSearchQuery = query;
+      currentSearchLimit = 35;
+      const list = document.getElementById('search-results-list');
+      const count = document.getElementById('search-results-count');
+      const heading = document.getElementById('search-results-heading');
+
+      heading.textContent = `Results for "${query}"`;
+      count.textContent = 'Searching...';
+      list.innerHTML = `
+        <div class="text-center py-20 text-zinc-400 text-sm flex items-center justify-center gap-3">
+          <svg class="animate-spin h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span>Fetching YouTube audio streams...</span>
+        </div>
+      `;
+
+      try {
+        const res = await fetch(apiUrl(`/api/search?q=${encodeURIComponent(query)}&limit=35`));
+        const tracks = await res.json();
+        count.textContent = `${tracks.length} tracks found`;
+        renderTrackList(tracks, list);
+        attachLoadMoreButton(list);
+
+        if (autoPlayFirst && tracks.length > 0) {
+          playTrack(tracks[0]);
+        }
+      } catch (err) {
+        list.innerHTML = `<div class="text-center py-20 text-red-400 text-sm">Search failed: ${err.message}</div>`;
+        count.textContent = '0 found';
+      }
+    }
+
+    function attachLoadMoreButton(list) {
+      const existingBtn = document.getElementById('load-more-btn-container');
+      if (existingBtn) existingBtn.remove();
+
+      const btnContainer = document.createElement('div');
+      btnContainer.id = 'load-more-btn-container';
+      btnContainer.className = 'flex justify-center py-4 mt-2 border-t border-zinc-800/60';
+      btnContainer.innerHTML = `
+        <button id="load-more-btn" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white text-xs font-semibold px-6 py-2.5 rounded-xl transition flex items-center gap-2">
+          <span>Load More Tracks</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+      `;
+
+      btnContainer.querySelector('#load-more-btn').addEventListener('click', async () => {
+        const btn = btnContainer.querySelector('#load-more-btn');
+        btn.innerHTML = `<svg class="animate-spin h-3.5 w-3.5 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> <span>Loading more...</span>`;
+        btn.disabled = true;
+
+        currentSearchLimit += 25;
+        try {
+          const res = await fetch(apiUrl(`/api/search?q=${encodeURIComponent(currentSearchQuery)}&limit=${currentSearchLimit}`));
+          const tracks = await res.json();
+          document.getElementById('search-results-count').textContent = `${tracks.length} tracks found`;
+          renderTrackList(tracks, list);
+          if (currentSearchLimit < 60) {
+            attachLoadMoreButton(list);
+          }
+        } catch (e) {
+          btn.textContent = 'Could not load more';
+        }
+      });
+
+      list.appendChild(btnContainer);
+    }
+
+    // Generic Track List Renderer
+    function renderTrackList(tracks, container, isQueue = false) {
+      container.innerHTML = '';
+      if (!tracks.length) {
+        container.innerHTML = `<div class="text-center py-16 text-zinc-500 text-sm">No tracks found.</div>`;
+        return;
+      }
+
+      tracks.forEach((track, index) => {
+        const div = document.createElement('div');
+        div.className = "flex items-center justify-between p-2.5 rounded-2xl hover:bg-zinc-800/60 border border-transparent hover:border-zinc-800 transition cursor-pointer group";
+
+        const dur = track.duration ? `${Math.floor(track.duration / 60)}:${(track.duration % 60).toString().padStart(2, '0')}` : '';
+        const isCurrent = state.queue[state.currentIndex]?.id === track.id;
+
+        div.innerHTML = `
+          <div class="flex items-center gap-3.5 flex-1 min-w-0 pr-2">
+            <div class="relative w-11 h-11 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 border border-zinc-800/60">
+              <img src="${track.thumbnail}" alt="" class="w-full h-full object-cover">
+              ${isCurrent ? `
+                <div class="absolute inset-0 bg-red-600/60 flex items-center justify-center">
+                  <span class="w-2.5 h-2.5 rounded-full bg-white animate-ping"></span>
+                </div>
+              ` : `
+                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                  <svg class="w-4 h-4 fill-white" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                </div>
+              `}
+            </div>
+            <div class="min-w-0 flex-1">
+              <h4 class="text-xs font-bold ${isCurrent ? 'text-red-400' : 'text-white'} group-hover:text-red-400 transition truncate">${track.title}</h4>
+              <p class="text-[11px] text-zinc-400 truncate mt-0.5">${track.artist} ${dur ? `• ${dur}` : ''}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button class="add-queue-btn text-zinc-400 hover:text-white p-2 rounded-lg hover:bg-zinc-800 transition" title="Add to Queue">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            </button>
+            <button class="like-btn text-zinc-400 hover:text-red-500 p-2 rounded-lg hover:bg-zinc-800 transition" title="Like">
+              <svg class="w-4 h-4 ${isLiked(track.id) ? 'fill-red-500 text-red-500' : 'fill-none stroke-current'}" viewBox="0 0 24 24"><path stroke-width="2" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            </button>
+            <a href="${apiUrl('/api/download/' + track.id)}" target="_blank" class="download-btn text-zinc-400 hover:text-white p-2 rounded-lg hover:bg-zinc-800 transition" title="Download MP3">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            </a>
+          </div>
+        `;
+
+        div.querySelector('.add-queue-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          addToQueue(track);
+        });
+
+        div.querySelector('.like-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleLikeTrack(track);
+          renderTrackList(tracks, container, isQueue);
+        });
+
+        div.addEventListener('click', () => {
+          if (isQueue) {
+            state.currentIndex = index;
+            loadAndPlay(track);
+          } else {
+            playTrack(track);
+          }
+        });
+
+        container.appendChild(div);
+      });
+    }
+
+    // Playback Controller
+    function playTrack(track) {
+      // If queue is empty or song isn't in queue, add it
+      const existingIdx = state.queue.findIndex(t => t.id === track.id);
+      if (existingIdx !== -1) {
+        state.currentIndex = existingIdx;
+      } else {
+        state.queue.splice(state.currentIndex + 1, 0, track);
+        state.currentIndex = state.currentIndex + 1;
+      }
+      updateQueueBadge();
+      loadAndPlay(track);
+
+      // Trigger Radio recommendations if queue is short
+      if (state.autoplayRadio && state.queue.length <= state.currentIndex + 2) {
+        fetchRadioRecommendations(track);
+      }
+    }
+
+    function loadAndPlay(track) {
+      miniTitle.textContent = track.title;
+      miniArtist.textContent = track.artist;
+      fsTitle.textContent = track.title;
+      fsArtist.textContent = track.artist;
+
+      if (track.thumbnail) {
+        miniThumb.src = track.thumbnail;
+        miniThumb.classList.remove('hidden');
+        miniThumbPlaceholder.classList.add('hidden');
+        fsThumb.src = track.thumbnail;
+        fsThumb.classList.remove('hidden');
+        fsThumbPlaceholder.classList.add('hidden');
+      }
+
+      updateLikeButtons(isLiked(track.id));
+      recordHistory(track);
+
+      // Connect direct stream URL
+      audio.src = apiUrl(`/api/stream/${track.id}`);
+      audio.play().then(() => {
+        setPlayingUI(true);
+      }).catch(err => {
+        console.log('Playback start error:', err);
+      });
+
+      // Update MediaSession
+      updateMediaSession(track);
+
+      // Fetch Synced Lyrics
+      fetchLyrics(track);
+
+      // Fetch live algorithmic recommendations for the current track (YouTube Music Radio)
+      loadTrackRecommendations(track);
+    }
+
+    function togglePlay() {
+      if (!audio.src) {
+        if (state.queue.length > 0) {
+          state.currentIndex = 0;
+          loadAndPlay(state.queue[0]);
+        }
+        return;
+      }
+      if (audio.paused) {
+        audio.play();
+        setPlayingUI(true);
+      } else {
+        audio.pause();
+        setPlayingUI(false);
+      }
+    }
+
+    function setPlayingUI(playing) {
+      state.isPlaying = playing;
+      if (playing) {
+        playIcon.classList.add('hidden');
+        pauseIcon.classList.remove('hidden');
+        fsPlayIcon.classList.add('hidden');
+        fsPauseIcon.classList.remove('hidden');
+      } else {
+        playIcon.classList.remove('hidden');
+        pauseIcon.classList.add('hidden');
+        fsPlayIcon.classList.remove('hidden');
+        fsPauseIcon.classList.add('hidden');
+      }
+    }
+
+    function playNext() {
+      if (state.repeatMode === 'one') {
+        audio.currentTime = 0;
+        audio.play();
+        return;
+      }
+      if (state.currentIndex + 1 < state.queue.length) {
+        state.currentIndex++;
+        loadAndPlay(state.queue[state.currentIndex]);
+      } else if (state.autoplayRadio && state.queue.length > 0) {
+        const lastTrack = state.queue[state.currentIndex];
+        fetchRadioRecommendations(lastTrack, true);
+      } else if (state.repeatMode === 'all' && state.queue.length > 0) {
+        state.currentIndex = 0;
+        loadAndPlay(state.queue[0]);
+      }
+    }
+
+    function playPrevious() {
+      if (audio.currentTime > 4) {
+        audio.currentTime = 0;
+        return;
+      }
+      if (state.currentIndex > 0) {
+        state.currentIndex--;
+        loadAndPlay(state.queue[state.currentIndex]);
+      }
+    }
+
+    function toggleShuffle() {
+      state.isShuffle = !state.isShuffle;
+      const btn = document.getElementById('shuffle-btn');
+      if (state.isShuffle) {
+        btn.classList.add('text-red-500');
+        // Shuffle upcoming tracks in queue
+        if (state.queue.length > state.currentIndex + 1) {
+          const upcoming = state.queue.slice(state.currentIndex + 1);
+          upcoming.sort(() => Math.random() - 0.5);
+          state.queue = [...state.queue.slice(0, state.currentIndex + 1), ...upcoming];
+          updateQueueBadge();
+        }
+      } else {
+        btn.classList.remove('text-red-500');
+      }
+    }
+
+    function toggleRepeat() {
+      const btn = document.getElementById('repeat-btn');
+      if (state.repeatMode === 'off') {
+        state.repeatMode = 'all';
+        btn.classList.add('text-red-500');
+        btn.title = "Repeat All";
+      } else if (state.repeatMode === 'all') {
+        state.repeatMode = 'one';
+        btn.classList.add('text-red-400', 'font-black');
+        btn.title = "Repeat Current Track";
+      } else {
+        state.repeatMode = 'off';
+        btn.classList.remove('text-red-500', 'text-red-400', 'font-black');
+        btn.title = "Repeat Off";
+      }
+    }
+
+    function setPlaybackRate(rate) {
+      audio.playbackRate = parseFloat(rate);
+    }
+
+    // Audio Events
+    audio.addEventListener('timeupdate', () => {
+      if (!audio.duration) return;
+      const cur = audio.currentTime;
+      const dur = audio.duration;
+      const pct = (cur / dur) * 100;
+
+      seekBar.value = pct;
+      fsSeekBar.value = pct;
+
+      const curStr = formatTime(cur);
+      const durStr = formatTime(dur);
+
+      currentTimeLabel.textContent = curStr;
+      durationLabel.textContent = durStr;
+      fsTimeCurrent.textContent = curStr;
+      fsTimeDuration.textContent = durStr;
+
+      // Update Synced Lyrics
+      updateLyricsKaraoke(cur);
+    });
+
+    audio.addEventListener('ended', () => {
+      playNext();
+    });
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    // Radio & Autoplay Recommendations
+    async function fetchRadioRecommendations(track, playImmediately = false) {
+      try {
+        const res = await fetch(apiUrl(`/api/radio/${track.id}?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`));
+        const recs = await res.json();
+        
+        // Filter duplicates
+        const newTracks = recs.filter(r => !state.queue.some(q => q.id === r.id));
+        if (newTracks.length > 0) {
+          state.queue.push(...newTracks);
+          updateQueueBadge();
+
+          if (playImmediately && state.currentIndex + 1 < state.queue.length) {
+            state.currentIndex++;
+            loadAndPlay(state.queue[state.currentIndex]);
+          }
+        }
+      } catch (err) {
+        console.log('Radio fetch error:', err);
+      }
+    }
+
+    function toggleAutoplayRadio(checked) {
+      state.autoplayRadio = checked;
+    }
+
+    // Queue Management
+    function addToQueue(track) {
+      state.queue.push(track);
+      updateQueueBadge();
+      alertToast(`Added "${track.title}" to queue`);
+    }
+
+    function clearQueue() {
+      state.queue = [];
+      state.currentIndex = -1;
+      audio.pause();
+      audio.src = '';
+      setPlayingUI(false);
+      updateQueueBadge();
+      renderQueueView();
+    }
+
+    function updateQueueBadge() {
+      const badge = document.getElementById('queue-badge');
+      badge.textContent = state.queue.length;
+    }
+
+    function renderQueueView() {
+      const list = document.getElementById('queue-list');
+      const fsList = document.getElementById('fs-queue-list');
+      renderTrackList(state.queue, list, true);
+      renderTrackList(state.queue, fsList, true);
+    }
+
+    // Synced Karaoke Lyrics
+    async function fetchLyrics(track) {
+      fsLyricsScroll.innerHTML = '<p class="text-zinc-500 text-sm my-auto animate-pulse">Loading live synchronized lyrics...</p>';
+      parsedLyrics = [];
+
+      try {
+        const res = await fetch(apiUrl(`/api/lyrics?artist=${encodeURIComponent(track.artist)}&title=${encodeURIComponent(track.title)}&duration=${track.duration || 0}`));
+        const data = await res.json();
+
+        if (data.syncedLyrics) {
+          parseLRC(data.syncedLyrics);
+          renderLyricsKaraoke();
+        } else if (data.plainLyrics) {
+          fsLyricsScroll.innerHTML = `<pre class="text-sm text-zinc-300 font-sans whitespace-pre-wrap leading-loose">${data.plainLyrics}</pre>`;
+        } else {
+          fsLyricsScroll.innerHTML = '<p class="text-zinc-500 text-sm my-auto">No lyrics available for this song.</p>';
+        }
+      } catch (err) {
+        fsLyricsScroll.innerHTML = '<p class="text-zinc-500 text-sm my-auto">Could not fetch lyrics.</p>';
+      }
+    }
+
+    function parseLRC(lrc) {
+      const lines = lrc.split('\n');
+      const timeRegex = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\]/;
+      parsedLyrics = [];
+
+      lines.forEach(line => {
+        const match = timeRegex.exec(line);
+        if (match) {
+          const min = parseInt(match[1]);
+          const sec = parseInt(match[2]);
+          const mil = match[3] ? parseInt(match[3].padEnd(3, '0')) : 0;
+          const time = min * 60 + sec + mil / 1000;
+          const text = line.replace(timeRegex, '').trim();
+          if (text) parsedLyrics.push({ time, text });
+        }
+      });
+    }
+
+    function renderLyricsKaraoke() {
+      fsLyricsScroll.innerHTML = '';
+      parsedLyrics.forEach((lyric, index) => {
+        const p = document.createElement('p');
+        p.className = 'lyric-line text-sm text-zinc-400 py-2 px-4 rounded-xl';
+        p.id = `fs-lyric-${index}`;
+        p.textContent = lyric.text;
+        p.addEventListener('click', () => {
+          audio.currentTime = lyric.time;
+          audio.play();
+        });
+        fsLyricsScroll.appendChild(p);
+      });
+    }
+
+    function updateLyricsKaraoke(curTime) {
+      if (!parsedLyrics.length) return;
+      let activeIdx = -1;
+      for (let i = 0; i < parsedLyrics.length; i++) {
+        if (curTime >= parsedLyrics[i].time) {
+          activeIdx = i;
+        } else {
+          break;
+        }
+      }
+
+      if (activeIdx !== -1) {
+        parsedLyrics.forEach((_, i) => {
+          const el = document.getElementById(`fs-lyric-${i}`);
+          if (!el) return;
+          if (i === activeIdx) {
+            if (!el.classList.contains('lyric-active')) {
+              el.classList.add('lyric-active');
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          } else {
+            el.classList.remove('lyric-active');
+          }
+        });
+      }
+    }
+
+    // Fullscreen View Toggles
+    function openFullscreenPlayer() {
+      fsModal.classList.remove('hidden');
+    }
+    function closeFullscreenPlayer() {
+      fsModal.classList.add('hidden');
+    }
+
+    let currentRecommendations = [];
+
+    async function loadTrackRecommendations(track) {
+      const fsList = document.getElementById('fs-radio-list');
+      const exploreSection = document.getElementById('recommended-next-section');
+      const exploreContainer = document.getElementById('recommended-next-container');
+      const subtitle = document.getElementById('recommended-next-subtitle');
+      const fsSubtitle = document.getElementById('fs-radio-subtitle');
+
+      exploreSection.classList.remove('hidden');
+      subtitle.textContent = `Recommended based on "${track.title}" by ${track.artist}`;
+      fsSubtitle.textContent = `Picks similar to "${track.title}"`;
+
+      fsList.innerHTML = `<p class="text-zinc-500 text-xs py-8 text-center animate-pulse">Loading YouTube Music Radio recommendations...</p>`;
+      exploreContainer.innerHTML = `<div class="col-span-full py-8 text-center text-xs text-zinc-500 animate-pulse">Finding matching tracks...</div>`;
+
+      try {
+        const res = await fetch(apiUrl(`/api/radio/${track.id}?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`));
+        const recs = await res.json();
+        currentRecommendations = recs;
+
+        // Render in Fullscreen Modal
+        renderTrackList(recs, fsList);
+
+        // Render in Explore Grid
+        exploreContainer.innerHTML = '';
+        recs.slice(0, 6).forEach(rec => {
+          const div = document.createElement('div');
+          div.className = "cursor-pointer group bg-zinc-900/70 border border-zinc-800/80 hover:border-zinc-700 rounded-2xl p-2.5 flex flex-col gap-2 transition hover:scale-[1.02] shadow-sm";
+          div.innerHTML = `
+            <div class="relative w-full aspect-square rounded-xl overflow-hidden bg-zinc-950">
+              <img src="${rec.thumbnail}" alt="" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <div class="w-9 h-9 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg">
+                  <svg class="w-4 h-4 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                </div>
+              </div>
+            </div>
+            <h4 class="text-xs font-bold text-white truncate mt-0.5">${rec.title}</h4>
+            <p class="text-[10px] text-zinc-400 truncate">${rec.artist}</p>
+          `;
+          div.addEventListener('click', () => {
+            playTrack(rec);
+          });
+          exploreContainer.appendChild(div);
+        });
+      } catch (err) {
+        fsList.innerHTML = `<p class="text-zinc-500 text-xs py-8 text-center">Could not load recommendations.</p>`;
+      }
+    }
+
+    function queueAllRecommendations() {
+      if (!currentRecommendations.length) return;
+      currentRecommendations.forEach(t => {
+        if (!state.queue.some(q => q.id === t.id)) {
+          state.queue.push(t);
+        }
+      });
+      updateQueueBadge();
+      alertToast(`Added ${currentRecommendations.length} recommended tracks to queue!`);
+    }
+
+    function setFsView(view) {
+      document.getElementById('fs-view-cover-btn').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white transition";
+      document.getElementById('fs-view-lyrics-btn').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white transition";
+      document.getElementById('fs-view-queue-btn').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white transition";
+      document.getElementById('fs-view-radio-btn').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white transition flex items-center gap-1";
+      fsCoverView.classList.add('hidden');
+      fsLyricsView.classList.add('hidden');
+      fsQueueView.classList.add('hidden');
+      document.getElementById('fs-radio-view').classList.add('hidden');
+
+      if (view === 'cover') {
+        document.getElementById('fs-view-cover-btn').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 text-white transition";
+        fsCoverView.classList.remove('hidden');
+      } else if (view === 'lyrics') {
+        document.getElementById('fs-view-lyrics-btn').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 text-white transition";
+        fsLyricsView.classList.remove('hidden');
+      } else if (view === 'queue') {
+        document.getElementById('fs-view-queue-btn').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 text-white transition";
+        fsQueueView.classList.remove('hidden');
+        renderQueueView();
+      } else if (view === 'radio') {
+        document.getElementById('fs-view-radio-btn').className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 text-white transition flex items-center gap-1";
+        document.getElementById('fs-radio-view').classList.remove('hidden');
+      }
+    }
+
+    // Likes & Favorites Store
+    function isLiked(trackId) {
+      return state.likedSongs.some(t => t.id === trackId);
+    }
+
+    function toggleLikeCurrentTrack() {
+      const cur = state.queue[state.currentIndex];
+      if (cur) toggleLikeTrack(cur);
+    }
+
+    function toggleLikeTrack(track) {
+      const idx = state.likedSongs.findIndex(t => t.id === track.id);
+      if (idx !== -1) {
+        state.likedSongs.splice(idx, 1);
+        updateLikeButtons(false);
+      } else {
+        state.likedSongs.unshift(track);
+        updateLikeButtons(true);
+      }
+      localStorage.setItem('vimusic_liked', JSON.stringify(state.likedSongs));
+      updateLibraryCounts();
+    }
+
+    function updateLikeButtons(liked) {
+      const miniIcon = document.getElementById('mini-like-icon');
+      const fsIcon = document.getElementById('fs-like-icon');
+      if (liked) {
+        miniIcon.classList.add('fill-red-500', 'text-red-500');
+        miniIcon.classList.remove('fill-none');
+        fsIcon.classList.add('fill-red-500', 'text-red-500');
+        fsIcon.classList.remove('fill-none');
+      } else {
+        miniIcon.classList.remove('fill-red-500', 'text-red-500');
+        miniIcon.classList.add('fill-none');
+        fsIcon.classList.remove('fill-red-500', 'text-red-500');
+        fsIcon.classList.add('fill-none');
+      }
+    }
+
+    // Library Views
+    function updateLibraryCounts() {
+      document.getElementById('liked-songs-count').textContent = `${state.likedSongs.length} tracks favorited`;
+      document.getElementById('playlists-count').textContent = `${state.playlists.length} playlists created`;
+      document.getElementById('history-count').textContent = `${state.history.length} songs played`;
+    }
+
+    function showLikedSongsView() {
+      const container = document.getElementById('library-detail-container');
+      container.innerHTML = `
+        <div class="flex items-center justify-between pb-4 mb-3 border-b border-zinc-800">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-red-500"></span>
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider">Favorited Songs (${state.likedSongs.length})</h3>
+          </div>
+          ${state.likedSongs.length ? `
+            <button onclick="playAllLiked()" class="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs px-4 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-red-600/20">
+              <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <span>Play All</span>
+            </button>
+          ` : ''}
+        </div>
+        <div id="liked-tracks-list" class="flex flex-col gap-2"></div>
+      `;
+      renderTrackList(state.likedSongs, document.getElementById('liked-tracks-list'));
+    }
+
+    function playAllLiked() {
+      if (!state.likedSongs.length) return;
+      state.queue = [...state.likedSongs];
+      state.currentIndex = 0;
+      updateQueueBadge();
+      loadAndPlay(state.queue[0]);
+    }
+
+    function showPlaylistsView() {
+      const container = document.getElementById('library-detail-container');
+      container.innerHTML = `
+        <div class="flex items-center justify-between pb-4 mb-3 border-b border-zinc-800">
+          <h3 class="text-sm font-bold text-white uppercase tracking-wider">Your Custom Playlists (${state.playlists.length})</h3>
+          <button onclick="openCreatePlaylistModal()" class="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs px-3 py-1.5 rounded-xl transition">
+            + New Playlist
+          </button>
+        </div>
+        <div id="playlists-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"></div>
+      `;
+
+      const list = document.getElementById('playlists-list');
+      if (!state.playlists.length) {
+        list.innerHTML = `<p class="col-span-full text-center py-12 text-zinc-500 text-sm">No custom playlists created yet. Click "+ New Playlist" to make one.</p>`;
+        return;
+      }
+
+      state.playlists.forEach((pl, idx) => {
+        const div = document.createElement('div');
+        div.className = "bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-2xl p-4 flex flex-col justify-between transition cursor-pointer";
+        div.innerHTML = `
+          <div>
+            <h4 class="font-bold text-sm text-white">${pl.name}</h4>
+            <p class="text-xs text-zinc-400 mt-1">${pl.tracks.length} tracks</p>
+          </div>
+          <div class="flex items-center justify-between mt-4 pt-3 border-t border-zinc-800/60 text-xs">
+            <span class="text-red-400 font-semibold hover:underline">Open</span>
+            <button class="delete-pl-btn text-zinc-500 hover:text-red-400 p-1">Delete</button>
+          </div>
+        `;
+        div.querySelector('.delete-pl-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          state.playlists.splice(idx, 1);
+          localStorage.setItem('vimusic_playlists', JSON.stringify(state.playlists));
+          updateLibraryCounts();
+          showPlaylistsView();
+        });
+        div.addEventListener('click', () => {
+          openPlaylistDetails(pl);
+        });
+        list.appendChild(div);
+      });
+    }
+
+    function openPlaylistDetails(pl) {
+      const container = document.getElementById('library-detail-container');
+      container.innerHTML = `
+        <div class="flex items-center justify-between pb-4 mb-3 border-b border-zinc-800">
+          <div>
+            <button onclick="showPlaylistsView()" class="text-xs text-zinc-400 hover:text-white mb-1">← Back to Playlists</button>
+            <h3 class="text-lg font-bold text-white">${pl.name}</h3>
+            <p class="text-xs text-zinc-400">${pl.tracks.length} tracks</p>
+          </div>
+          ${pl.tracks.length ? `
+            <button onclick="playPlaylistTracks('${pl.id}')" class="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-red-600/20">
+              <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <span>Play Playlist</span>
+            </button>
+          ` : ''}
+        </div>
+        <div id="pl-tracks-list" class="flex flex-col gap-2"></div>
+      `;
+      renderTrackList(pl.tracks, document.getElementById('pl-tracks-list'));
+    }
+
+    function playPlaylistTracks(plId) {
+      const pl = state.playlists.find(p => p.id === plId);
+      if (pl && pl.tracks.length) {
+        state.queue = [...pl.tracks];
+        state.currentIndex = 0;
+        updateQueueBadge();
+        loadAndPlay(state.queue[0]);
+      }
+    }
+
+    function showHistoryView() {
+      const container = document.getElementById('library-detail-container');
+      container.innerHTML = `
+        <div class="flex items-center justify-between pb-4 mb-3 border-b border-zinc-800">
+          <h3 class="text-sm font-bold text-white uppercase tracking-wider">Listening History (${state.history.length})</h3>
+          <button onclick="clearHistory()" class="text-zinc-500 hover:text-red-400 text-xs transition">Clear History</button>
+        </div>
+        <div id="history-tracks-list" class="flex flex-col gap-2"></div>
+      `;
+      renderTrackList(state.history, document.getElementById('history-tracks-list'));
+    }
+
+    function recordHistory(track) {
+      state.history = state.history.filter(t => t.id !== track.id);
+      state.history.unshift(track);
+      if (state.history.length > 50) state.history.pop();
+      localStorage.setItem('vimusic_history', JSON.stringify(state.history));
+      updateLibraryCounts();
+    }
+
+    function clearHistory() {
+      state.history = [];
+      localStorage.setItem('vimusic_history', JSON.stringify([]));
+      updateLibraryCounts();
+      showHistoryView();
+    }
+
+    // Create Playlist Modal
+    function openCreatePlaylistModal() {
+      document.getElementById('playlist-modal').classList.remove('hidden');
+      document.getElementById('playlist-name-input').focus();
+    }
+    function closeCreatePlaylistModal() {
+      document.getElementById('playlist-modal').classList.add('hidden');
+      document.getElementById('playlist-name-input').value = '';
+    }
+    function saveNewPlaylist() {
+      const name = document.getElementById('playlist-name-input').value.trim();
+      if (!name) return;
+      const newPl = {
+        id: 'pl_' + Date.now(),
+        name: name,
+        createdAt: new Date().toISOString(),
+        tracks: []
+      };
+      state.playlists.push(newPl);
+      localStorage.setItem('vimusic_playlists', JSON.stringify(state.playlists));
+      closeCreatePlaylistModal();
+      updateLibraryCounts();
+      showPlaylistsView();
+    }
+
+    // Export & Import Library
+    function exportLibrary() {
+      const data = {
+        likedSongs: state.likedSongs,
+        playlists: state.playlists,
+        history: state.history,
+        exportedAt: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `vimusic_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+    }
+
+    function importLibrary(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const json = JSON.parse(e.target.result);
+          if (json.likedSongs) state.likedSongs = json.likedSongs;
+          if (json.playlists) state.playlists = json.playlists;
+          if (json.history) state.history = json.history;
+          localStorage.setItem('vimusic_liked', JSON.stringify(state.likedSongs));
+          localStorage.setItem('vimusic_playlists', JSON.stringify(state.playlists));
+          localStorage.setItem('vimusic_history', JSON.stringify(state.history));
+          updateLibraryCounts();
+          showLikedSongsView();
+          alertToast('Library restored successfully!');
+        } catch (err) {
+          alert('Invalid backup file: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // Sleep Timer
+    function openSleepTimerModal() {
+      document.getElementById('sleep-timer-modal').classList.remove('hidden');
+    }
+    function closeSleepTimerModal() {
+      document.getElementById('sleep-timer-modal').classList.add('hidden');
+    }
+    function setSleepTimer(val) {
+      cancelSleepTimer();
+      const label = document.getElementById('sleep-timer-label');
+
+      if (val === 'end_of_track') {
+        const handler = () => {
+          audio.pause();
+          setPlayingUI(false);
+          audio.removeEventListener('ended', handler);
+          label.textContent = "Sleep Timer";
+        };
+        audio.addEventListener('ended', handler);
+        label.textContent = "Sleep: End of song";
+      } else {
+        const minutes = parseInt(val);
+        const ms = minutes * 60 * 1000;
+        sleepTimerTimeout = setTimeout(() => {
+          audio.pause();
+          setPlayingUI(false);
+          label.textContent = "Sleep Timer";
+        }, ms);
+        label.textContent = `Sleep: ${minutes}m`;
+      }
+      closeSleepTimerModal();
+      alertToast(`Sleep timer active`);
+    }
+    function cancelSleepTimer() {
+      if (sleepTimerTimeout) clearTimeout(sleepTimerTimeout);
+      sleepTimerTimeout = null;
+      document.getElementById('sleep-timer-label').textContent = "Sleep Timer";
+      closeSleepTimerModal();
+    }
+
+    // MediaSession API Integration (Lockscreen controls)
+    function initMediaSession() {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('play', () => togglePlay());
+        navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+        navigator.mediaSession.setActionHandler('previoustrack', () => playPrevious());
+        navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+          if (details.seekTime) audio.currentTime = details.seekTime;
+        });
+      }
+    }
+
+    function updateMediaSession(track) {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: track.title,
+          artist: track.artist,
+          album: 'ViMusic',
+          artwork: [
+            { src: track.thumbnail, sizes: '512x512', type: 'image/jpeg' }
+          ]
+        });
+      }
+    }
+
+    // Download Handler
+    function downloadCurrentTrack() {
+      const cur = state.queue[state.currentIndex];
+      if (cur) {
+        window.open(apiUrl(`/api/download/${cur.id}`), '_blank');
+      }
+    }
+
+    // Quick Toast Notification
+    function alertToast(msg) {
+      const toast = document.createElement('div');
+      toast.className = "fixed top-20 right-6 z-50 bg-zinc-900 border border-zinc-700 text-white text-xs px-4 py-2.5 rounded-2xl shadow-2xl transition-all transform translate-y-2 opacity-0";
+      toast.textContent = msg;
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      }, 10);
+      setTimeout(() => {
+        toast.classList.add('opacity-0');
+        setTimeout(() => toast.remove(), 300);
+      }, 2500);
+    }
+  </script>
+</body>
+</html>

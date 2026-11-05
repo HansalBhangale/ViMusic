@@ -1,0 +1,17 @@
+{
+  "name": "vimusic-android",
+  "version": "1.0.0",
+  "description": "ViMusic Native Android Music Player",
+  "scripts": {
+    "cap:sync": "cap sync",
+    "cap:open": "cap open android",
+    "cap:build": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.1.0",
+    "@capacitor/android": "^6.1.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.0"
+  }
+}
