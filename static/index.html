@@ -744,27 +744,138 @@
 
   <!-- APP STATE SCRIPT -->
   <script>
-    // Audio engine & DOM elements
-    const audio = document.getElementById('audio-engine');
+    // Audio engine & DOM elements.
+    // Android uses the native Media3 player; desktop browsers keep HTMLAudioElement.
+    const htmlAudio = document.getElementById('audio-engine');
+    const nativeMusicPlayer = window.Capacitor?.registerPlugin?.('NativeMusicPlayer')
+      || window.Capacitor?.Plugins?.NativeMusicPlayer
+      || null;
+    const useNativePlayback = Boolean(
+      nativeMusicPlayer &&
+      window.Capacitor?.getPlatform?.() === 'android'
+    );
+
+    class NativeAudioFacade extends EventTarget {
+      constructor(plugin) {
+        super();
+        this.plugin = plugin;
+        this._src = '';
+        this._paused = true;
+        this._currentTime = 0;
+        this._duration = 0;
+        this._volume = 1;
+        this._playbackRate = 1;
+        this._seeking = false;
+        this.error = null;
+        this._lastPlaybackState = 0;
+        this._isActuallyPlaying = false;
+      }
+
+      get src() { return this._src; }
+      set src(value) { this._src = String(value || ''); }
+
+      get paused() { return this._paused; }
+      get currentTime() { return this._currentTime; }
+      set currentTime(value) {
+        const seconds = Math.max(0, Number(value) || 0);
+        this._currentTime = seconds;
+        this._seeking = true;
+        this.dispatchEvent(new Event('seeking'));
+        this.plugin.seekTo({ positionMs: Math.round(seconds * 1000) })
+          .then(snapshot => this.applySnapshot(snapshot))
+          .catch(error => console.error('Native seek failed:', error))
+          .finally(() => {
+            this._seeking = false;
+            this.dispatchEvent(new Event('seeked'));
+          });
+      }
+
+      get duration() { return this._duration; }
+      get seeking() { return this._seeking; }
+
+      get volume() { return this._volume; }
+      set volume(value) {
+        this._volume = Math.max(0, Math.min(1, Number(value) || 0));
+        this.plugin.setVolume({ volume: this._volume })
+          .catch(error => console.error('Native volume change failed:', error));
+      }
+
+      get playbackRate() { return this._playbackRate; }
+      set playbackRate(value) {
+        this._playbackRate = Number(value) || 1;
+        this.plugin.setPlaybackSpeed({ speed: this._playbackRate })
+          .catch(error => console.error('Native playback speed change failed:', error));
+      }
+
+      load() {
+        // Media3 prepares MediaItems through the native bridge.
+      }
+
+      removeAttribute(name) {
+        if (name === 'src') this._src = '';
+      }
+
+      play() {
+        return this.plugin.play().then(snapshot => {
+          this.applySnapshot(snapshot);
+          return undefined;
+        });
+      }
+
+      pause() {
+        this._paused = true;
+        return this.plugin.pause().then(snapshot => {
+          this.applySnapshot(snapshot);
+          return undefined;
+        }).catch(error => {
+          console.warn('Native pause request failed:', error);
+        });
+      }
+
+      applySnapshot(snapshot) {
+        if (!snapshot) return;
+
+        const wasEnded = this._lastPlaybackState === 4;
+        const isActuallyPlaying = Boolean(snapshot.isPlaying);
+
+        this._paused = !snapshot.playWhenReady;
+        this._currentTime = Math.max(0, Number(snapshot.currentPosition) || 0) / 1000;
+        this._duration = Math.max(0, Number(snapshot.duration) || 0) / 1000;
+        this._lastPlaybackState = Number(snapshot.playbackState) || 0;
+
+        // Only emit state transitions. Progress events arrive twice per second;
+        // dispatching "playing" on every tick would constantly reset UI listeners.
+        if (isActuallyPlaying && !this._isActuallyPlaying) {
+          this.dispatchEvent(new Event('playing'));
+        } else if (!isActuallyPlaying && this._isActuallyPlaying) {
+          this.dispatchEvent(new Event('pause'));
+        }
+
+        if (this._lastPlaybackState === 4 && !wasEnded) {
+          this.dispatchEvent(new Event('ended'));
+        }
+
+        this._isActuallyPlaying = isActuallyPlaying;
+        this.dispatchEvent(new Event('timeupdate'));
+      }
+
+      emitError(message) {
+        this._paused = true;
+        this._isActuallyPlaying = false;
+        this.error = { code: 2, message: String(message || 'Native audio playback failed') };
+        this.dispatchEvent(new Event('error'));
+      }
+    }
+
+    const audio = useNativePlayback
+      ? new NativeAudioFacade(nativeMusicPlayer)
+      : htmlAudio;
+
     // Incremented whenever playback is replaced or cancelled.
     // This prevents an old play() promise from updating the new track's UI.
     let playbackRequestId = 0;
+    let activeNativeTrackId = null;
     let stopAfterCurrentTrack = false;
-    const NativePlayer = (() => {
-      try {
-        const capacitor = window.Capacitor;
-        const platform = capacitor && typeof capacitor.getPlatform === 'function' ? capacitor.getPlatform() : '';
-        if (platform !== 'android') return null;
-        if (typeof capacitor.registerPlugin === 'function') return capacitor.registerPlugin('NativePlayer');
-        return capacitor.Plugins ? capacitor.Plugins.NativePlayer || null : null;
-      } catch (error) {
-        console.warn('Native playback bridge unavailable:', error);
-        return null;
-      }
-    })();
-    const useNativePlayback = Boolean(NativePlayer);
-    let nativeCurrentTrackId = null;
-    let lastNativePlaybackState = 'idle';
     const miniThumb = document.getElementById('mini-thumb');
     const miniThumbPlaceholder = document.getElementById('mini-thumb-placeholder');
     const miniTitle = document.getElementById('mini-title');
@@ -1001,6 +1112,124 @@
       history: JSON.parse(localStorage.getItem('vimusic_history') || '[]'),
     };
 
+    function mapNativeTrack(track) {
+      return {
+        id: track.id,
+        title: track.title || 'Unknown title',
+        artist: track.artist || 'Unknown artist',
+        thumbnail: track.thumbnail || track.artworkUrl || '',
+        duration: Number(track.duration) || 0
+      };
+    }
+
+    function syncNativeTrack(snapshot) {
+      if (!useNativePlayback || !snapshot) return;
+
+      if (snapshot.mediaId) {
+        const index = state.queue.findIndex(track => track.id === snapshot.mediaId);
+        if (index >= 0) state.currentIndex = index;
+
+        let track = state.queue[state.currentIndex];
+        if (!track || track.id !== snapshot.mediaId) {
+          track = {
+            id: snapshot.mediaId,
+            title: snapshot.title || 'Unknown title',
+            artist: snapshot.artist || 'Unknown artist',
+            thumbnail: snapshot.artworkUrl || '',
+            duration: 0
+          };
+          if (state.currentIndex < 0) {
+            state.queue = [track];
+            state.currentIndex = 0;
+          }
+        }
+
+        if (activeNativeTrackId !== track.id) {
+          activeNativeTrackId = track.id;
+          miniTitle.textContent = track.title;
+          miniArtist.textContent = track.artist;
+          fsTitle.textContent = track.title;
+          fsArtist.textContent = track.artist;
+
+          if (track.thumbnail) {
+            miniThumb.src = track.thumbnail;
+            miniThumb.classList.remove('hidden');
+            miniThumbPlaceholder.classList.add('hidden');
+            fsThumb.src = track.thumbnail;
+            fsThumb.classList.remove('hidden');
+            fsThumbPlaceholder.classList.add('hidden');
+          }
+
+          updateLikeButtons(isLiked(track.id));
+          fetchLyrics(track);
+        }
+      }
+
+      updateQueueBadge();
+      renderQueueView();
+    }
+
+    async function initializeNativePlayback() {
+      try {
+        await nativeMusicPlayer.addListener('playbackState', snapshot => {
+          audio.applySnapshot(snapshot);
+          syncNativeTrack(snapshot);
+        });
+
+        await nativeMusicPlayer.addListener('playbackProgress', snapshot => {
+          audio.applySnapshot(snapshot);
+        });
+
+        await nativeMusicPlayer.addListener('trackChanged', snapshot => {
+          audio.applySnapshot(snapshot);
+          syncNativeTrack(snapshot);
+        });
+
+        await nativeMusicPlayer.addListener('playbackError', error => {
+          audio.emitError(error?.message || 'Native audio playback failed');
+        });
+
+        await syncNativePlaybackState();
+      } catch (error) {
+        console.error('Could not initialize native playback:', error);
+        alertToast('Native player could not initialize. Reinstall the updated APK.');
+      }
+    }
+
+    async function syncNativePlaybackState() {
+      if (!useNativePlayback) return;
+
+      try {
+        const queueState = await nativeMusicPlayer.getQueue();
+        if (Array.isArray(queueState.tracks)) {
+          state.queue = queueState.tracks.map(mapNativeTrack);
+          state.currentIndex = Number(queueState.currentMediaItemIndex ?? -1);
+          state.isShuffle = Boolean(queueState.shuffleEnabled);
+          state.repeatMode = queueState.repeatMode === 1 ? 'one'
+            : queueState.repeatMode === 2 ? 'all' : 'off';
+          updateQueueBadge();
+          renderQueueView();
+        }
+
+        const snapshot = await nativeMusicPlayer.getState();
+        audio.applySnapshot(snapshot);
+        syncNativeTrack(snapshot);
+      } catch (error) {
+        console.warn('Unable to restore native playback state:', error);
+      }
+    }
+
+    function nativeQueueItems() {
+      return state.queue.map(track => ({
+        id: String(track.id),
+        title: track.title || 'Unknown title',
+        artist: track.artist || 'Unknown artist',
+        album: 'ViMusic',
+        artworkUrl: track.thumbnail || '',
+        streamUrl: apiUrl('/api/stream/' + encodeURIComponent(track.id))
+      }));
+    }
+
     let parsedLyrics = [];
     let sleepTimerTimeout = null;
     let sleepTimerEndTimestamp = null;
@@ -1012,33 +1241,35 @@
       loadDynamicQuickPicks();
       updateLibraryCounts();
       showLikedSongsView();
-      initMediaSession();
-      initNativePlayerBridge();
+      if (useNativePlayback) {
+        initializeNativePlayback();
+      } else {
+        initMediaSession();
+      }
 
       // Seek Bar
       seekBar.addEventListener('input', (e) => {
-        const fraction = Number(e.target.value) / 100;
-        if (useNativePlayback) {
-          NativePlayer.getState().then(s => NativePlayer.seekTo({ positionMs: Math.round(fraction * (s.durationMs || 0)) })).catch(console.error);
-        } else if (audio.duration) {
-          audio.currentTime = fraction * audio.duration;
+        if (audio.duration) {
+          audio.currentTime = (e.target.value / 100) * audio.duration;
         }
       });
       fsSeekBar.addEventListener('input', (e) => {
-        const fraction = Number(e.target.value) / 100;
-        if (useNativePlayback) {
-          NativePlayer.getState().then(s => NativePlayer.seekTo({ positionMs: Math.round(fraction * (s.durationMs || 0)) })).catch(console.error);
-        } else if (audio.duration) {
-          audio.currentTime = fraction * audio.duration;
+        if (audio.duration) {
+          audio.currentTime = (e.target.value / 100) * audio.duration;
         }
       });
 
       // Volume
       volumeSlider.addEventListener('input', (e) => {
-        const volume = parseFloat(e.target.value);
-        if (useNativePlayback) NativePlayer.setVolume({ volume }).catch(console.error);
-        else audio.volume = volume;
+        audio.volume = parseFloat(e.target.value);
       });
+
+      if (useNativePlayback) {
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) syncNativePlaybackState();
+        });
+        window.addEventListener('focus', syncNativePlaybackState);
+      }
 
       // Search input enter
       document.getElementById('search-form').addEventListener('submit', (e) => {
@@ -1346,121 +1577,6 @@
       });
     }
 
-    // Native Media3 bridge. HTML audio remains the desktop/browser fallback.
-    function nativeQueueItems(tracks) {
-      return tracks.map(track => ({
-        id: String(track.id),
-        title: track.title || 'Unknown title',
-        artist: track.artist || 'Unknown artist',
-        artwork: track.thumbnail || '',
-        url: apiUrl(`/api/stream/${encodeURIComponent(track.id)}`)
-      }));
-    }
-
-    function updatePlaybackProgress(positionSeconds, durationSeconds) {
-      const duration = Number(durationSeconds) || 0;
-      const current = Number(positionSeconds) || 0;
-      if (!duration || !Number.isFinite(duration)) return;
-      const percent = Math.max(0, Math.min(100, (current / duration) * 100));
-      seekBar.value = percent;
-      fsSeekBar.value = percent;
-      currentTimeLabel.textContent = formatTime(current);
-      durationLabel.textContent = formatTime(duration);
-      fsTimeCurrent.textContent = formatTime(current);
-      fsTimeDuration.textContent = formatTime(duration);
-      updateLyricsKaraoke(current);
-    }
-
-    function updateTrackUi(track) {
-      if (!track) return;
-      miniTitle.textContent = track.title || 'Unknown title';
-      miniArtist.textContent = track.artist || 'Unknown artist';
-      fsTitle.textContent = track.title || 'Unknown title';
-      fsArtist.textContent = track.artist || 'Unknown artist';
-      if (track.thumbnail) {
-        miniThumb.src = track.thumbnail;
-        miniThumb.classList.remove('hidden');
-        miniThumbPlaceholder.classList.add('hidden');
-        fsThumb.src = track.thumbnail;
-        fsThumb.classList.remove('hidden');
-        fsThumbPlaceholder.classList.add('hidden');
-      }
-      updateLikeButtons(isLiked(track.id));
-      recordHistory(track);
-      fetchLyrics(track);
-      loadTrackRecommendations(track);
-    }
-
-    function initNativePlayerBridge() {
-      if (!useNativePlayback) return;
-
-      NativePlayer.addListener('playbackState', payload => {
-        if (typeof payload.isPlaying === 'boolean') setPlayingUI(payload.isPlaying);
-        if (Number.isInteger(payload.currentIndex) && payload.currentIndex >= 0) state.currentIndex = payload.currentIndex;
-        if (payload.playbackState === 'ended' && lastNativePlaybackState !== 'ended') {
-          if (stopAfterCurrentTrack) {
-            stopAfterCurrentTrack = false;
-            pauseAudio();
-            const label = document.getElementById('sleep-timer-label');
-            if (label) label.textContent = 'Sleep Timer';
-          } else {
-            playNext();
-          }
-        }
-        lastNativePlaybackState = payload.playbackState || lastNativePlaybackState;
-      }).catch(error => console.error('Native playbackState listener failed:', error));
-
-      NativePlayer.addListener('playbackProgress', payload => {
-        updatePlaybackProgress((Number(payload.positionMs) || 0) / 1000, (Number(payload.durationMs) || 0) / 1000);
-        if (typeof payload.isPlaying === 'boolean' && payload.isPlaying !== state.isPlaying) setPlayingUI(payload.isPlaying);
-      }).catch(error => console.error('Native playbackProgress listener failed:', error));
-
-      NativePlayer.addListener('trackChanged', payload => {
-        const mediaId = String(payload.currentMediaId || '');
-        const index = Number(payload.currentIndex);
-        if (Number.isInteger(index) && index >= 0) state.currentIndex = index;
-        // ExoPlayer reason 0 is an automatic transition after the current item ends.
-        if (stopAfterCurrentTrack && Number(payload.reason) === 0) {
-          stopAfterCurrentTrack = false;
-          pauseAudio();
-          const label = document.getElementById('sleep-timer-label');
-          if (label) label.textContent = 'Sleep Timer';
-          return;
-        }
-        const track = state.queue.find(item => String(item.id) === mediaId) || state.queue[state.currentIndex];
-        if (track && String(track.id) !== String(nativeCurrentTrackId)) {
-          nativeCurrentTrackId = String(track.id);
-          updateTrackUi(track);
-          updateQueueBadge();
-        }
-      }).catch(error => console.error('Native trackChanged listener failed:', error));
-
-      NativePlayer.addListener('playbackError', payload => {
-        console.error('Native playback error:', payload);
-        setPlayingUI(false);
-        alertToast(payload.message || 'Native audio playback failed.');
-      }).catch(error => console.error('Native playbackError listener failed:', error));
-
-      NativePlayer.getState().then(payload => {
-        if (typeof payload.isPlaying === 'boolean') setPlayingUI(payload.isPlaying);
-        if (Number.isInteger(payload.currentIndex) && payload.currentIndex >= 0) state.currentIndex = payload.currentIndex;
-        updatePlaybackProgress((Number(payload.positionMs) || 0) / 1000, (Number(payload.durationMs) || 0) / 1000);
-      }).catch(error => console.warn('Could not read native playback state:', error));
-    }
-
-    function syncNativeQueue(preservePosition = true) {
-      if (!useNativePlayback || state.queue.length === 0) return;
-      NativePlayer.getState().then(current => NativePlayer.setQueue({
-        tracks: nativeQueueItems(state.queue),
-        startIndex: Math.max(0, state.currentIndex),
-        startPositionMs: preservePosition ? (Number(current.positionMs) || 0) : 0,
-        playWhenReady: Boolean(current.playWhenReady)
-      })).catch(error => {
-        console.error('Could not synchronize native queue:', error);
-        alertToast('Could not update the native playback queue.');
-      });
-    }
-
     // Playback Controller
     function playTrack(track) {
       // If queue is empty or song isn't in queue, add it
@@ -1522,9 +1638,9 @@
     }
 
     function pauseAudio() {
+      // Invalidate any pending play() promise before pausing the element.
       playbackRequestId++;
-      if (useNativePlayback) NativePlayer.pause().catch(error => console.error('Native pause failed:', error));
-      else audio.pause();
+      audio.pause();
       setPlayingUI(false);
     }
 
@@ -1535,7 +1651,9 @@
         return;
       }
 
+      // Each track change owns a new playback request.
       const requestId = ++playbackRequestId;
+
       miniTitle.textContent = track.title || 'Unknown title';
       miniArtist.textContent = track.artist || 'Unknown artist';
       fsTitle.textContent = track.title || 'Unknown title';
@@ -1552,40 +1670,48 @@
 
       updateLikeButtons(isLiked(track.id));
       recordHistory(track);
-      nativeCurrentTrackId = String(track.id);
+
+      // Cancel the previous request before replacing the current item.
+      audio.pause();
+      setPlayingUI(false);
+      audio.src = apiUrl(`/api/stream/${encodeURIComponent(track.id)}`);
+      audio.load();
 
       if (useNativePlayback) {
-        const tracks = nativeQueueItems(state.queue);
-        const startIndex = Math.max(0, state.queue.findIndex(item => String(item.id) === String(track.id)));
-        NativePlayer.setQueue({ tracks, startIndex, startPositionMs: 0, playWhenReady: true })
-          .then(() => setPlayingUI(true))
-          .catch(error => {
-            console.error('Native playback start failed:', error);
-            setPlayingUI(false);
-            alertToast(error.message || 'Could not start native playback.');
-          });
+        activeNativeTrackId = track.id;
+
+        const tracks = nativeQueueItems();
+        const startIndex = Math.max(0, Math.min(state.currentIndex, tracks.length - 1));
+
+        nativeMusicPlayer.setQueue({
+          tracks,
+          startIndex,
+          positionMs: 0,
+          playWhenReady: false,
+          shuffleEnabled: state.isShuffle,
+          repeatMode: state.repeatMode
+        }).then(() => {
+          if (requestId !== playbackRequestId) return;
+          playAudioSafely(requestId, 'Native playback start error');
+        }).catch(error => {
+          if (requestId !== playbackRequestId) return;
+          console.error('Native queue setup failed:', error);
+          setPlayingUI(false);
+          alertToast('Could not load this track in the Android player.');
+        });
       } else {
-        audio.pause();
-        setPlayingUI(false);
-        audio.src = apiUrl(`/api/stream/${encodeURIComponent(track.id)}`);
-        audio.load();
         playAudioSafely(requestId, 'Playback start error');
       }
 
-      if (!useNativePlayback) updateMediaSession(track);
+      // Browser MediaSession is only used on desktop. Android uses Media3.
+      updateMediaSession(track);
+
+      // Fetch synced lyrics and recommendations for this track.
       fetchLyrics(track);
       loadTrackRecommendations(track);
     }
 
     function togglePlay() {
-      if (useNativePlayback) {
-        if (state.isPlaying) pauseAudio();
-        else if (state.queue.length > 0 && state.currentIndex < 0) {
-          state.currentIndex = 0;
-          loadAndPlay(state.queue[0]);
-        } else NativePlayer.play().catch(error => console.error('Native resume failed:', error));
-        return;
-      }
       if (!audio.src) {
         if (state.queue.length > 0) {
           state.currentIndex = 0;
@@ -1593,8 +1719,12 @@
         }
         return;
       }
-      if (audio.paused) playAudioSafely(playbackRequestId, 'Playback resume error');
-      else pauseAudio();
+
+      if (audio.paused) {
+        playAudioSafely(playbackRequestId, 'Playback resume error');
+      } else {
+        pauseAudio();
+      }
     }
 
     function setPlayingUI(playing) {
@@ -1613,23 +1743,27 @@
     }
 
     function playNext() {
-      if (state.repeatMode === 'one') {
-        if (useNativePlayback) NativePlayer.seekTo({ positionMs: 0 }).then(() => NativePlayer.play()).catch(console.error);
-        else {
-          audio.currentTime = 0;
-          playAudioSafely(playbackRequestId, 'Repeat playback error');
+      if (useNativePlayback) {
+        const isLastTrack = state.currentIndex >= state.queue.length - 1;
+        if (isLastTrack && state.autoplayRadio && state.repeatMode !== 'all' && state.queue.length > 0) {
+          fetchRadioRecommendations(state.queue[state.currentIndex], true);
+        } else {
+          nativeMusicPlayer.seekToNext().catch(error => console.warn('Native next failed:', error));
         }
         return;
       }
+
+      if (state.repeatMode === 'one') {
+        audio.currentTime = 0;
+        playAudioSafely(playbackRequestId, 'Repeat playback error');
+        return;
+      }
       if (state.currentIndex + 1 < state.queue.length) {
-        if (useNativePlayback) NativePlayer.skipToNext().catch(error => console.error('Native next failed:', error));
-        else {
-          state.currentIndex++;
-          loadAndPlay(state.queue[state.currentIndex]);
-        }
+        state.currentIndex++;
+        loadAndPlay(state.queue[state.currentIndex]);
       } else if (state.autoplayRadio && state.queue.length > 0) {
         const lastTrack = state.queue[state.currentIndex];
-        if (lastTrack) fetchRadioRecommendations(lastTrack, true);
+        fetchRadioRecommendations(lastTrack, true);
       } else if (state.repeatMode === 'all' && state.queue.length > 0) {
         state.currentIndex = 0;
         loadAndPlay(state.queue[0]);
@@ -1638,12 +1772,10 @@
 
     function playPrevious() {
       if (useNativePlayback) {
-        NativePlayer.getState().then(playerState => {
-          if ((Number(playerState.positionMs) || 0) > 4000) NativePlayer.seekTo({ positionMs: 0 }).catch(console.error);
-          else if (state.currentIndex > 0) NativePlayer.skipToPrevious().catch(console.error);
-        }).catch(console.error);
+        nativeMusicPlayer.seekToPrevious().catch(error => console.warn('Native previous failed:', error));
         return;
       }
+
       if (audio.currentTime > 4) {
         audio.currentTime = 0;
         return;
@@ -1659,7 +1791,12 @@
       const btn = document.getElementById('shuffle-btn');
       if (state.isShuffle) {
         btn.classList.add('text-red-500');
-        if (state.queue.length > state.currentIndex + 1) {
+        if (useNativePlayback) {
+          nativeMusicPlayer.setShuffleEnabled({ enabled: true })
+            .catch(error => console.warn('Native shuffle failed:', error));
+        }
+        // Shuffle upcoming tracks in queue on browser playback.
+        if (!useNativePlayback && state.queue.length > state.currentIndex + 1) {
           const upcoming = state.queue.slice(state.currentIndex + 1);
           upcoming.sort(() => Math.random() - 0.5);
           state.queue = [...state.queue.slice(0, state.currentIndex + 1), ...upcoming];
@@ -1667,10 +1804,11 @@
         }
       } else {
         btn.classList.remove('text-red-500');
+        if (useNativePlayback) {
+          nativeMusicPlayer.setShuffleEnabled({ enabled: false })
+            .catch(error => console.warn('Native shuffle failed:', error));
+        }
       }
-      // Shuffle is applied to the JS queue order to preserve the visible queue order.
-      if (useNativePlayback && state.queue.length > 0) syncNativeQueue(true);
-      if (useNativePlayback) NativePlayer.setShuffleEnabled({ enabled: false }).catch(console.error);
     }
 
     function toggleRepeat() {
@@ -1688,13 +1826,15 @@
         btn.classList.remove('text-red-500', 'text-red-400', 'font-black');
         btn.title = "Repeat Off";
       }
-      if (useNativePlayback) NativePlayer.setRepeatMode({ mode: state.repeatMode }).catch(console.error);
+
+      if (useNativePlayback) {
+        nativeMusicPlayer.setRepeatMode({ repeatMode: state.repeatMode })
+          .catch(error => console.warn('Native repeat mode failed:', error));
+      }
     }
 
     function setPlaybackRate(rate) {
-      const value = parseFloat(rate);
-      if (useNativePlayback) NativePlayer.setPlaybackRate({ rate: value }).catch(console.error);
-      else audio.playbackRate = value;
+      audio.playbackRate = parseFloat(rate);
     }
 
     // Audio Events
@@ -1773,8 +1913,15 @@
           updateQueueBadge();
 
           if (useNativePlayback && !playImmediately) {
-            NativePlayer.addToQueue({ tracks: nativeQueueItems(newTracks) }).catch(error => console.error('Could not append native queue:', error));
+            nativeMusicPlayer.appendToQueue({ tracks: newTracks.map(track => ({
+              id: String(track.id),
+              title: track.title || 'Unknown title',
+              artist: track.artist || 'Unknown artist',
+              artworkUrl: track.thumbnail || '',
+              streamUrl: apiUrl('/api/stream/' + encodeURIComponent(track.id))
+            })) }).catch(error => console.warn('Could not append radio tracks:', error));
           }
+
           if (playImmediately && state.currentIndex + 1 < state.queue.length) {
             state.currentIndex++;
             loadAndPlay(state.queue[state.currentIndex]);
@@ -1792,11 +1939,18 @@
     // Queue Management
     function addToQueue(track) {
       state.queue.push(track);
-      if (useNativePlayback) NativePlayer.addToQueue({ tracks: nativeQueueItems([track]) }).catch(error => {
-        console.error('Could not add native queue item:', error);
-        alertToast('Could not add this track to the native queue.');
-      });
       updateQueueBadge();
+
+      if (useNativePlayback) {
+        nativeMusicPlayer.appendToQueue({ tracks: [{
+          id: String(track.id),
+          title: track.title || 'Unknown title',
+          artist: track.artist || 'Unknown artist',
+          artworkUrl: track.thumbnail || '',
+          streamUrl: apiUrl('/api/stream/' + encodeURIComponent(track.id))
+        }] }).catch(error => console.warn('Could not append track to native queue:', error));
+      }
+
       alertToast(`Added "${track.title}" to queue`);
     }
 
@@ -1804,12 +1958,11 @@
       state.queue = [];
       state.currentIndex = -1;
       pauseAudio();
+      audio.removeAttribute('src');
+      audio.load();
       if (useNativePlayback) {
-        nativeCurrentTrackId = null;
-        NativePlayer.clearQueue().catch(console.error);
-      } else {
-        audio.removeAttribute('src');
-        audio.load();
+        nativeMusicPlayer.clearQueue().catch(error => console.warn('Could not clear native queue:', error));
+        activeNativeTrackId = null;
       }
       updateQueueBadge();
       renderQueueView();
@@ -1878,12 +2031,8 @@
         p.id = `fs-lyric-${index}`;
         p.textContent = lyric.text;
         p.addEventListener('click', () => {
-          if (useNativePlayback) {
-            NativePlayer.seekTo({ positionMs: Math.round(lyric.time * 1000) }).then(() => NativePlayer.play()).catch(error => console.error('Native lyric seek failed:', error));
-          } else {
-            audio.currentTime = lyric.time;
-            playAudioSafely(playbackRequestId, 'Lyrics playback error');
-          }
+          audio.currentTime = lyric.time;
+          playAudioSafely(playbackRequestId, 'Lyrics playback error');
         });
         fsLyricsScroll.appendChild(p);
       });
@@ -2291,6 +2440,7 @@
     // MediaSession API Integration (Lockscreen controls)
     function initMediaSession() {
       if (useNativePlayback) return;
+
       if ('mediaSession' in navigator) {
         navigator.mediaSession.setActionHandler('play', () => togglePlay());
         navigator.mediaSession.setActionHandler('pause', () => togglePlay());
@@ -2304,6 +2454,7 @@
 
     function updateMediaSession(track) {
       if (useNativePlayback) return;
+
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: track.title,
