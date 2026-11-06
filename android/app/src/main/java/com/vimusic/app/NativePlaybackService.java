@@ -3,6 +3,7 @@ import android.app.PendingIntent;
 import android.content.Intent;
 import android.os.Build;
 import androidx.media3.common.AudioAttributes;
+import androidx.media3.common.C;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.session.MediaSession;
 import androidx.media3.session.MediaSessionService;
@@ -14,7 +15,10 @@ public final class NativePlaybackService extends MediaSessionService {
 
     @Override public void onCreate() {
         super.onCreate();
-        player = new ExoPlayer.Builder(this).build();
+        player = new ExoPlayer.Builder(this)
+            // Keep CPU and Wi-Fi awake while network audio plays with the screen off.
+            .setWakeMode(C.WAKE_MODE_NETWORK)
+            .build();
         player.setAudioAttributes(AudioAttributes.DEFAULT, true);
         player.setHandleAudioBecomingNoisy(true);
 
