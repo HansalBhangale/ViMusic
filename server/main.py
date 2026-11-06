@@ -4,6 +4,7 @@ import re
 import os
 import tempfile
 import base64
+import socket
 from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
@@ -27,12 +28,21 @@ static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "stat
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# Suppress false-alarm stderr noise during multi-strategy rotation
+# Keep normal yt-dlp output quiet, but surface extraction and PO-token errors.
 class QuietLogger:
-    def debug(self, msg): pass
-    def info(self, msg): pass
-    def warning(self, msg): pass
-    def error(self, msg): pass
+    def debug(self, msg):
+        message = str(msg)
+        if "pot" in message.lower() or "po token" in message.lower():
+            print(f"[yt-dlp debug] {message}", flush=True)
+
+    def info(self, msg):
+        pass
+
+    def warning(self, msg):
+        print(f"[yt-dlp warning] {msg}", flush=True)
+
+    def error(self, msg):
+        print(f"[yt-dlp error] {msg}", flush=True)
 
 # Setup optional persistent YouTube Cookies (from environment variable or file)
 COOKIES_FILE = None
@@ -87,14 +97,24 @@ async def serve_index():
         return FileResponse(index_file)
     return {"status": "ok", "message": "ViMusic Backend Running"}
 
+def _pot_provider_ready() -> bool:
+    """Return True when the local bgutil PO-token HTTP server is listening."""
+    try:
+        with socket.create_connection(("127.0.0.1", 4416), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
 @app.get("/api/health")
 def health():
     return {
         "status": "ok",
         "engine": "vimusic-yt-streamer",
-        "version": "2.6-timeout-shield",
+        "version": "2.7-stream-proxy",
         "ytdlp_version": getattr(yt_dlp.version, "__version__", "unknown"),
-        "has_cookies": bool(COOKIES_FILE)
+        "has_cookies": bool(COOKIES_FILE),
+        "po_token_provider": "listening" if _pot_provider_ready() else "unavailable"
     }
 
 @app.get("/api/search")
@@ -218,45 +238,45 @@ def get_stream_url(video_id: str):
     info = None
     last_err = None
 
-    # Multi-client extraction rotation to bypass datacenter/cloud IP bot walls (e.g. Render, Railway)
-    # Strategy 1: visionos dedicated client (bypasses bot challenges on cloud datacenter IPs)
+    # Try mweb first: yt-dlp recommends using a PO-token provider for this client.
+    # The bgutil plugin obtains tokens from the local HTTP service on 127.0.0.1:4416.
     extraction_strategies = [
         {
             **BASE_OPTS,
-            'format': 'ba[ext=m4a]/ba/b',
+            'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'skip_download': True,
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['visionos']
+                    'player_client': ['mweb']
                 }
             }
         },
-        # Strategy 2: visionos + android fallback
+        # Fallback client that can work for some videos without a GVS PO token.
         {
             **BASE_OPTS,
-            'format': 'ba[ext=m4a]/140/ba/18/b',
+            'format': 'bestaudio/best',
             'skip_download': True,
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['visionos', 'android']
+                    'player_client': ['android_vr']
                 }
             }
         },
-        # Strategy 3: android + tv_downgraded fallback
+        # Additional client fallback.
         {
             **BASE_OPTS,
-            'format': 'ba[ext=m4a]/ba/b',
+            'format': 'bestaudio/best',
             'skip_download': True,
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'tv_downgraded', 'mweb']
+                    'player_client': ['tv_downgraded', 'web_safari']
                 }
             }
         },
-        # Strategy 4: Standard extract fallback
+        # Standard yt-dlp client selection as a final fallback.
         {
             **BASE_OPTS,
-            'format': 'ba/b',
+            'format': 'bestaudio/best',
             'skip_download': True
         }
     ]
@@ -270,6 +290,7 @@ def get_stream_url(video_id: str):
                     break
         except Exception as e:
             last_err = e
+            print(f"[STREAM] Extraction strategy failed for {video_id}: {e}", flush=True)
             continue
 
     if not info or not info.get("url"):
@@ -301,81 +322,218 @@ def get_stream_url(video_id: str):
     if info.get("thumbnails"):
         thumb = info["thumbnails"][-1].get("url")
         
+    audio_ext = (info.get("ext") or "").lower()
+    if audio_ext == "webm":
+        mime_type = "audio/webm"
+    elif audio_ext == "opus":
+        mime_type = "audio/ogg"
+    elif audio_ext == "mp3":
+        mime_type = "audio/mpeg"
+    else:
+        mime_type = info.get("mime_type") or "audio/mp4"
+
     entry = {
         "url": url,
+        # Keep the headers yt-dlp says are required for this media URL.
+        "http_headers": dict(info.get("http_headers") or {}),
         "title": info.get("title", ""),
         "artist": info.get("uploader") or info.get("channel") or "Unknown Artist",
         "album": info.get("album") or "YouTube Music",
         "duration": info.get("duration", 0),
         "thumbnail": thumb or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
         "filesize": info.get("filesize") or info.get("filesize_approx") or 0,
-        "mime_type": "audio/mp4",
-        "expires": now + 4 * 3600 # 4 hours
+        "mime_type": mime_type,
+        "expires": now + 2 * 3600
     }
     stream_cache[video_id] = entry
     return entry
 
 @app.get("/api/stream/{video_id}")
 async def stream(video_id: str, request: Request):
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
+
+    client = httpx.AsyncClient(
+        timeout=httpx.Timeout(
+            connect=15.0,
+            read=60.0,
+            write=15.0,
+            pool=15.0
+        ),
+        follow_redirects=True
+    )
+
+    async def open_upstream(stream_info):
+        # YouTube media URLs may require the headers returned by yt-dlp.
+        upstream_headers = {}
+        extracted_headers = stream_info.get("http_headers") or {}
+
+        blocked_headers = {
+            "host",
+            "connection",
+            "content-length",
+            "transfer-encoding",
+            "range",
+            "accept-encoding",
+            "proxy-authorization",
+            "proxy-connection"
+        }
+
+        for key, value in extracted_headers.items():
+            if str(key).lower() not in blocked_headers and value is not None:
+                upstream_headers[str(key)] = str(value)
+
+        upstream_headers.setdefault(
+            "User-Agent",
+            "Mozilla/5.0 (Linux; Android 14) "
+            "AppleWebKit/537.36 Chrome/126.0 Mobile Safari/537.36"
+        )
+        # Avoid transparent decompression so Content-Length and byte ranges
+        # continue to describe the bytes being proxied.
+        upstream_headers["Accept-Encoding"] = "identity"
+
+        range_header = request.headers.get("range")
+        if range_header:
+            upstream_headers["Range"] = range_header
+
+        upstream_request = client.build_request(
+            "GET",
+            stream_info["url"],
+            headers=upstream_headers
+        )
+        return await client.send(upstream_request, stream=True)
+
     try:
-        info = await loop.run_in_executor(None, get_stream_url, video_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    stream_url = info["url"]
-    range_header = request.headers.get("Range")
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
-    if range_header:
-        headers["Range"] = range_header
-
-    client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
-    req = client.build_request("GET", stream_url, headers=headers)
-    upstream_response = await client.send(req, stream=True)
-
-    # If cached URL expired or returned 403/410, invalidate cache and retry once
-    if upstream_response.status_code in (403, 410):
-        await upstream_response.aclose()
-        stream_cache.pop(video_id, None)
+        # 1. Get a playable media URL and its required request headers.
         try:
             info = await loop.run_in_executor(None, get_stream_url, video_id)
-            stream_url = info["url"]
-            req = client.build_request("GET", stream_url, headers=headers)
-            upstream_response = await client.send(req, stream=True)
-        except Exception as retry_err:
-            await client.aclose()
-            raise HTTPException(status_code=500, detail=f"Stream refresh failed: {retry_err}")
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"YouTube audio extraction failed: {exc}"
+            ) from exc
 
-    async def stream_generator():
+        if not info or not info.get("url"):
+            raise HTTPException(
+                status_code=502,
+                detail="The extractor did not return a playable audio URL"
+            )
+
+        # 2. Request the media. Retry once if the signed URL has expired.
         try:
-            async for chunk in upstream_response.aiter_bytes(chunk_size=65536):
-                yield chunk
-        finally:
+            upstream_response = await open_upstream(info)
+        except httpx.HTTPError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Could not connect to the YouTube audio source: {exc}"
+            ) from exc
+
+        if upstream_response.status_code in (403, 410):
+            await upstream_response.aclose()
+            stream_cache.pop(video_id, None)
+
+            try:
+                info = await loop.run_in_executor(None, get_stream_url, video_id)
+                upstream_response = await open_upstream(info)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Audio URL refresh failed: {exc}"
+                ) from exc
+
+        # 3. Preserve 416 and its Content-Range for invalid client ranges.
+        if upstream_response.status_code == 416:
+            response_headers = {}
+            content_range = upstream_response.headers.get("Content-Range")
+            if content_range:
+                response_headers["Content-Range"] = content_range
             await upstream_response.aclose()
             await client.aclose()
+            return Response(
+                status_code=416,
+                content=b"",
+                headers=response_headers
+            )
 
-    content_type = upstream_response.headers.get("Content-Type", "audio/mp4")
-    if "video/" in content_type:
-        content_type = "audio/mp4"
+        if upstream_response.status_code not in (200, 206):
+            upstream_status = upstream_response.status_code
+            preview = bytearray()
+            try:
+                async for chunk in upstream_response.aiter_raw(chunk_size=512):
+                    preview.extend(chunk)
+                    if len(preview) >= 1024:
+                        break
+            finally:
+                await upstream_response.aclose()
 
-    response_headers = {
-        "Content-Type": content_type,
-        "Accept-Ranges": "bytes",
-        "Cache-Control": "public, max-age=14400"
-    }
-    if "Content-Range" in upstream_response.headers:
-        response_headers["Content-Range"] = upstream_response.headers["Content-Range"]
-    if "Content-Length" in upstream_response.headers:
-        response_headers["Content-Length"] = upstream_response.headers["Content-Length"]
+            error_text = preview[:1024].decode("utf-8", errors="replace")
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    f"YouTube audio source returned HTTP {upstream_status}: "
+                    f"{error_text[:300]}"
+                )
+            )
 
-    return StreamingResponse(
-        stream_generator(),
-        status_code=upstream_response.status_code,
-        headers=response_headers
-    )
+        # 4. Determine and forward the upstream media type.
+        upstream_type = (
+            upstream_response.headers.get("Content-Type", "")
+            .split(";", 1)[0]
+            .strip()
+            .lower()
+        )
+        if (
+            not upstream_type
+            or upstream_type == "application/octet-stream"
+            or upstream_type.startswith("video/")
+        ):
+            content_type = info.get("mime_type") or "audio/mp4"
+        else:
+            content_type = upstream_type
+
+        response_headers = {
+            "Content-Type": content_type,
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "no-store",
+            "Content-Disposition": "inline"
+        }
+
+        for header_name in ("Content-Range", "Content-Length", "ETag", "Last-Modified"):
+            header_value = upstream_response.headers.get(header_name)
+            if header_value:
+                response_headers[header_name] = header_value
+
+        # Use raw bytes: the upstream request asked for identity encoding,
+        # so the upstream Content-Length and Range metadata stay consistent.
+        async def stream_generator():
+            try:
+                async for chunk in upstream_response.aiter_raw(chunk_size=65536):
+                    if chunk:
+                        yield chunk
+            finally:
+                await upstream_response.aclose()
+                await client.aclose()
+
+        return StreamingResponse(
+            stream_generator(),
+            status_code=upstream_response.status_code,
+            headers=response_headers
+        )
+
+    except HTTPException:
+        await client.aclose()
+        raise
+    except httpx.HTTPError as exc:
+        await client.aclose()
+        raise HTTPException(
+            status_code=502,
+            detail=f"HTTP streaming error: {exc}"
+        ) from exc
+    except Exception as exc:
+        await client.aclose()
+        raise HTTPException(
+            status_code=502,
+            detail=f"Audio streaming proxy failed: {exc}"
+        ) from exc
 
 @app.get("/api/download/{video_id}")
 async def download(video_id: str):
@@ -391,7 +549,11 @@ async def download(video_id: str):
     
     # Download audio stream to temp file, tag with ID3/MP4, and stream back
     async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        headers = dict(info.get("http_headers") or {})
+        headers.setdefault(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        )
         audio_res = await client.get(info["url"], headers=headers)
         
         # Download cover art

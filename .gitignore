@@ -27,6 +27,7 @@ Thumbs.db
 # Executables & Binaries
 *.exe
 cloudflared*
+platform-tools/
 
 # Cookies & Credentials
 *cookies*.txt
