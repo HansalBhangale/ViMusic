@@ -102,6 +102,13 @@ public final class NativeMusicPlayerPlugin extends Plugin implements Player.List
         }, ContextCompat.getMainExecutor(getContext()));
     }
 
+    private void notifyPlaybackError(@NonNull String code, @Nullable String message) {
+        JSObject event = new JSObject();
+        event.put("code", code);
+        event.put("message", message != null ? message : "Native playback service error");
+        notifyListeners("playbackError", event);
+    }
+
     private interface ControllerAction {
         void run(@NonNull MediaController mediaController) throws Exception;
     }
