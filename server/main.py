@@ -5,16 +5,85 @@ import os
 import tempfile
 import base64
 import socket
-from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
+import inspect
+from starlette.applications import Starlette
+from starlette.routing import Route
+from starlette.requests import Request
+from starlette.responses import StreamingResponse, JSONResponse, FileResponse, Response
+from starlette.staticfiles import StaticFiles
+from starlette.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException
 import httpx
 import yt_dlp
 import uvicorn
 from mutagen.mp4 import MP4, MP4Cover
 
-app = FastAPI(title="ViMusic Engine")
+class ViMusicApp(Starlette):
+    """Small GET router using Starlette without FastAPI/Pydantic.
+
+    This backend only needs path/query parameter binding and JSON response
+    conversion. Keeping the Termux build on Starlette avoids pydantic-core's
+    Rust extension, which is difficult to build on Android/Termux.
+    """
+
+    def get(self, path: str, include_in_schema: bool = True):
+        def decorator(handler):
+            signature = inspect.signature(handler)
+
+            async def endpoint(request: Request):
+                kwargs = {}
+                for name, parameter in signature.parameters.items():
+                    if name == "request":
+                        kwargs[name] = request
+                        continue
+
+                    if name in request.path_params:
+                        raw_value = request.path_params[name]
+                    elif name in request.query_params:
+                        raw_value = request.query_params[name]
+                    elif parameter.default is not inspect.Parameter.empty:
+                        kwargs[name] = parameter.default
+                        continue
+                    else:
+                        raise HTTPException(
+                            status_code=422,
+                            detail=f"Missing required parameter: {name}"
+                        )
+
+                    annotation = parameter.annotation
+                    try:
+                        if annotation is int:
+                            kwargs[name] = int(raw_value)
+                        elif annotation is float:
+                            kwargs[name] = float(raw_value)
+                        elif annotation is bool:
+                            kwargs[name] = str(raw_value).lower() in {"1", "true", "yes", "on"}
+                        else:
+                            kwargs[name] = raw_value
+                    except (TypeError, ValueError) as exc:
+                        raise HTTPException(
+                            status_code=422,
+                            detail=f"Invalid value for parameter: {name}"
+                        ) from exc
+
+                result = handler(**kwargs)
+                if inspect.isawaitable(result):
+                    result = await result
+
+                if isinstance(result, (dict, list)):
+                    return JSONResponse(result)
+                if result is None:
+                    return Response(status_code=204)
+                return result
+
+            endpoint.__name__ = getattr(handler, "__name__", "endpoint")
+            self.router.routes.append(Route(path, endpoint, methods=["GET"]))
+            return handler
+
+        return decorator
+
+
+app = ViMusicApp(debug=False)
 
 app.add_middleware(
     CORSMiddleware,

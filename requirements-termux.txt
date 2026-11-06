@@ -1,7 +1,6 @@
-# Termux/Android does not currently have compatible pydantic-core wheels.
-# FastAPI 0.125.0 still supports Pydantic v1; this avoids the Rust/maturin build.
-fastapi==0.125.0
-pydantic==1.10.26
+# Android/Termux build: use Starlette directly and avoid FastAPI/Pydantic/pydantic-core.
+# This removes the Rust/maturin extension from the phone installation.
+starlette>=0.47.0,<1.0
 uvicorn>=0.28.0,<1.0
 yt-dlp>=2026.10.26
 httpx>=0.27.0

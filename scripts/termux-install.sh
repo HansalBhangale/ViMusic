@@ -15,6 +15,11 @@ if [ ! -d ".venv" ]; then
 fi
 
 .venv/bin/python -m pip install --upgrade pip
+
+# Remove the previous FastAPI/Pydantic attempt if it exists. Termux now uses
+# Starlette directly, so pydantic-core and its Rust/maturin build are unnecessary.
+.venv/bin/python -m pip uninstall -y fastapi pydantic pydantic-core || true
+
 .venv/bin/python -m pip install -r requirements-termux.txt
 
 mkdir -p "$HOME/.local/state/vimusic"

@@ -1,6 +1,6 @@
 # ViMusic on Android with Termux + Chrome
 
-This deployment runs the FastAPI app on the same Android phone as Chrome. It binds to
+This deployment runs the Starlette-based API app on the same Android phone as Chrome. It binds to
 `127.0.0.1:8765`, so the server is not exposed to other devices on the Wi-Fi network.
 
 ## 1. Install Termux
@@ -123,7 +123,7 @@ would expose the API to other devices on the same network.
 
 ## Notes and limitations
 
-- The Termux requirements intentionally omit the Docker-based bgutil service. The
+- The Termux requirements intentionally omit FastAPI/Pydantic (the API uses Starlette directly) and the Docker-based bgutil service. The
   existing health endpoint will report the PO-token provider as unavailable.
 - This deployment does not alter the YouTube extractor or guarantee that YouTube
   will accept a request. A mobile/residential IP is not a guarantee against bot checks,
