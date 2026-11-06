@@ -247,6 +247,27 @@ def get_stream_url(video_id: str):
             continue
 
     if not info or not info.get("url"):
+        # Auto-fallback for age-restricted / geoblocked music videos
+        err_msg = str(last_err).lower()
+        if "age" in err_msg or "inappropriate" in err_msg or "unavailable" in err_msg:
+            try:
+                # Use public oEmbed to get title and artist
+                with httpx.Client(timeout=4.0) as client:
+                    oembed_res = client.get(f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json")
+                    if oembed_res.status_code == 200:
+                        meta = oembed_res.json()
+                        song_title = meta.get("title", "")
+                        song_author = meta.get("author_name", "")
+                        search_q = f"{song_title} {song_author} audio"
+                        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
+                            s = ydl.extract_info(f"ytsearch3:{search_q}", download=False)
+                            for entry in s.get("entries", []):
+                                alt_id = entry.get("id")
+                                if alt_id and alt_id != video_id:
+                                    return get_stream_url(alt_id)
+            except Exception:
+                pass
+
         raise HTTPException(status_code=500, detail=f"Failed to stream video: {last_err}")
 
     url = info["url"]
