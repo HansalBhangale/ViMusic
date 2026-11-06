@@ -64,14 +64,21 @@ if raw_cookies:
 stream_cache = {}
 trending_cache = {"expires": 0, "tracks": []}
 
-ydl_search_opts = {
+BASE_OPTS = {
     'quiet': True,
     'no_warnings': True,
-    'extract_flat': True,
     'logger': QuietLogger(),
+    'socket_timeout': 10,
+    'js_runtimes': {'node': {}},
+    'remote_components': {'ejs:github'},
 }
 if COOKIES_FILE:
-    ydl_search_opts['cookiefile'] = COOKIES_FILE
+    BASE_OPTS['cookiefile'] = COOKIES_FILE
+
+ydl_search_opts = {
+    **BASE_OPTS,
+    'extract_flat': True,
+}
 
 @app.get("/")
 async def serve_index():
@@ -85,7 +92,7 @@ def health():
     return {
         "status": "ok",
         "engine": "vimusic-yt-streamer",
-        "version": "2.4-cloud-resilient",
+        "version": "2.5-cloud-resilient",
         "ytdlp_version": getattr(yt_dlp.version, "__version__", "unknown"),
         "has_cookies": bool(COOKIES_FILE)
     }
@@ -128,19 +135,15 @@ async def get_radio(video_id: str, title: str = "", artist: str = ""):
         # 1. Official YouTube Music algorithmic radio playlist RD{video_id} using visionos client
         url = f"https://www.youtube.com/watch?v={video_id}&list=RD{video_id}"
         radio_opts = {
-            'quiet': True,
-            'no_warnings': True,
+            **BASE_OPTS,
             'extract_flat': True,
             'playlist_items': '1-16',
-            'logger': QuietLogger(),
             'extractor_args': {
                 'youtube': {
                     'player_client': ['visionos', 'android']
                 }
             }
         }
-        if COOKIES_FILE:
-            radio_opts['cookiefile'] = COOKIES_FILE
         try:
             with yt_dlp.YoutubeDL(radio_opts) as ydl:
                 res = ydl.extract_info(url, download=False)
@@ -249,11 +252,9 @@ def get_stream_url(video_id: str):
     # Strategy 1: visionos dedicated client (bypasses bot challenges on cloud datacenter IPs)
     extraction_strategies = [
         {
+            **BASE_OPTS,
             'format': 'ba[ext=m4a]/ba/b',
-            'quiet': True,
-            'no_warnings': True,
             'skip_download': True,
-            'logger': QuietLogger(),
             'extractor_args': {
                 'youtube': {
                     'player_client': ['visionos']
@@ -262,11 +263,9 @@ def get_stream_url(video_id: str):
         },
         # Strategy 2: visionos + android fallback
         {
+            **BASE_OPTS,
             'format': 'ba[ext=m4a]/140/ba/18/b',
-            'quiet': True,
-            'no_warnings': True,
             'skip_download': True,
-            'logger': QuietLogger(),
             'extractor_args': {
                 'youtube': {
                     'player_client': ['visionos', 'android']
@@ -275,11 +274,9 @@ def get_stream_url(video_id: str):
         },
         # Strategy 3: android + tv_downgraded fallback
         {
+            **BASE_OPTS,
             'format': 'ba[ext=m4a]/ba/b',
-            'quiet': True,
-            'no_warnings': True,
             'skip_download': True,
-            'logger': QuietLogger(),
             'extractor_args': {
                 'youtube': {
                     'player_client': ['android', 'tv_downgraded', 'mweb']
@@ -288,17 +285,13 @@ def get_stream_url(video_id: str):
         },
         # Strategy 4: Standard extract fallback
         {
+            **BASE_OPTS,
             'format': 'ba/b',
-            'quiet': True,
-            'no_warnings': True,
-            'skip_download': True,
-            'logger': QuietLogger()
+            'skip_download': True
         }
     ]
 
     for strat in extraction_strategies:
-        if COOKIES_FILE:
-            strat['cookiefile'] = COOKIES_FILE
         try:
             with yt_dlp.YoutubeDL(strat) as ydl:
                 res = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
