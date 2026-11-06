@@ -746,6 +746,10 @@
   <script>
     // Audio engine & DOM elements
     const audio = document.getElementById('audio-engine');
+    // Incremented whenever playback is replaced or cancelled.
+    // This prevents an old play() promise from updating the new track's UI.
+    let playbackRequestId = 0;
+    let stopAfterCurrentTrack = false;
     const miniThumb = document.getElementById('mini-thumb');
     const miniThumbPlaceholder = document.getElementById('mini-thumb-placeholder');
     const miniTitle = document.getElementById('mini-title');
@@ -1337,11 +1341,68 @@
       }
     }
 
+    // Start audio without allowing rejected/stale play() promises to affect a newer track.
+    function playAudioSafely(requestId = playbackRequestId, context = 'Playback error') {
+      let playPromise;
+
+      try {
+        playPromise = audio.play();
+      } catch (error) {
+        if (requestId !== playbackRequestId) return;
+
+        if (error && error.name === 'AbortError') {
+          if (audio.paused) setPlayingUI(false);
+          return;
+        }
+
+        console.error(`${context}:`, error);
+        setPlayingUI(false);
+        alertToast('Unable to start playback. Please try again.');
+        return;
+      }
+
+      Promise.resolve(playPromise)
+        .then(() => {
+          // Ignore completion from a previous song or a request cancelled by pause.
+          if (requestId !== playbackRequestId || audio.paused) return;
+          setPlayingUI(true);
+        })
+        .catch(error => {
+          // Source replacement and an intentional pause commonly reject play() with AbortError.
+          if (requestId !== playbackRequestId) return;
+
+          if (error && error.name === 'AbortError') {
+            if (audio.paused) setPlayingUI(false);
+            return;
+          }
+
+          console.error(`${context}:`, error);
+          setPlayingUI(false);
+          alertToast('Playback failed. Please try again.');
+        });
+    }
+
+    function pauseAudio() {
+      // Invalidate any pending play() promise before pausing the element.
+      playbackRequestId++;
+      audio.pause();
+      setPlayingUI(false);
+    }
+
     function loadAndPlay(track) {
-      miniTitle.textContent = track.title;
-      miniArtist.textContent = track.artist;
-      fsTitle.textContent = track.title;
-      fsArtist.textContent = track.artist;
+      if (!track || !track.id) {
+        console.error('Cannot play an invalid track:', track);
+        alertToast('This track cannot be played.');
+        return;
+      }
+
+      // Each track change owns a new playback request.
+      const requestId = ++playbackRequestId;
+
+      miniTitle.textContent = track.title || 'Unknown title';
+      miniArtist.textContent = track.artist || 'Unknown artist';
+      fsTitle.textContent = track.title || 'Unknown title';
+      fsArtist.textContent = track.artist || 'Unknown artist';
 
       if (track.thumbnail) {
         miniThumb.src = track.thumbnail;
@@ -1355,23 +1416,20 @@
       updateLikeButtons(isLiked(track.id));
       recordHistory(track);
 
-      // Connect direct stream URL
-      audio.src = apiUrl(`/api/stream/${track.id}`);
+      // Cancel the old source before assigning the next one. The request ID makes
+      // the old source's AbortError harmless.
+      audio.pause();
+      setPlayingUI(false);
+      audio.src = apiUrl(`/api/stream/${encodeURIComponent(track.id)}`);
       audio.load();
-      audio.play().then(() => {
-        setPlayingUI(true);
-      }).catch(err => {
-        console.log('Playback start error:', err);
-        setPlayingUI(false);
-      });
 
-      // Update MediaSession
+      playAudioSafely(requestId, 'Playback start error');
+
+      // Update MediaSession.
       updateMediaSession(track);
 
-      // Fetch Synced Lyrics
+      // Fetch synced lyrics and recommendations for this track.
       fetchLyrics(track);
-
-      // Fetch live algorithmic recommendations for the current track (YouTube Music Radio)
       loadTrackRecommendations(track);
     }
 
@@ -1383,12 +1441,11 @@
         }
         return;
       }
+
       if (audio.paused) {
-        audio.play();
-        setPlayingUI(true);
+        playAudioSafely(playbackRequestId, 'Playback resume error');
       } else {
-        audio.pause();
-        setPlayingUI(false);
+        pauseAudio();
       }
     }
 
@@ -1410,7 +1467,7 @@
     function playNext() {
       if (state.repeatMode === 'one') {
         audio.currentTime = 0;
-        audio.play();
+        playAudioSafely(playbackRequestId, 'Repeat playback error');
         return;
       }
       if (state.currentIndex + 1 < state.queue.length) {
@@ -1480,7 +1537,9 @@
     });
 
     audio.addEventListener('pause', () => {
-      if (!audio.seeking) setPlayingUI(false);
+      if (!audio.seeking && audio.paused) {
+        setPlayingUI(false);
+      }
     });
 
     audio.addEventListener('error', () => {
@@ -1518,6 +1577,14 @@
     });
 
     audio.addEventListener('ended', () => {
+      if (stopAfterCurrentTrack) {
+        stopAfterCurrentTrack = false;
+        playbackRequestId++;
+        setPlayingUI(false);
+        const sleepLabel = document.getElementById('sleep-timer-label');
+        if (sleepLabel) sleepLabel.textContent = 'Sleep Timer';
+        return;
+      }
       playNext();
     });
 
@@ -1563,9 +1630,9 @@
     function clearQueue() {
       state.queue = [];
       state.currentIndex = -1;
-      audio.pause();
-      audio.src = '';
-      setPlayingUI(false);
+      pauseAudio();
+      audio.removeAttribute('src');
+      audio.load();
       updateQueueBadge();
       renderQueueView();
     }
@@ -1634,7 +1701,7 @@
         p.textContent = lyric.text;
         p.addEventListener('click', () => {
           audio.currentTime = lyric.time;
-          audio.play();
+          playAudioSafely(playbackRequestId, 'Lyrics playback error');
         });
         fsLyricsScroll.appendChild(p);
       });
@@ -2015,30 +2082,26 @@
       const label = document.getElementById('sleep-timer-label');
 
       if (val === 'end_of_track') {
-        const handler = () => {
-          audio.pause();
-          setPlayingUI(false);
-          audio.removeEventListener('ended', handler);
-          label.textContent = "Sleep Timer";
-        };
-        audio.addEventListener('ended', handler);
-        label.textContent = "Sleep: End of song";
+        stopAfterCurrentTrack = true;
+        label.textContent = 'Sleep: End of song';
       } else {
-        const minutes = parseInt(val);
+        stopAfterCurrentTrack = false;
+        const minutes = parseInt(val, 10);
         const ms = minutes * 60 * 1000;
         sleepTimerTimeout = setTimeout(() => {
-          audio.pause();
-          setPlayingUI(false);
-          label.textContent = "Sleep Timer";
+          pauseAudio();
+          label.textContent = 'Sleep Timer';
         }, ms);
         label.textContent = `Sleep: ${minutes}m`;
       }
+
       closeSleepTimerModal();
-      alertToast(`Sleep timer active`);
+      alertToast('Sleep timer active');
     }
     function cancelSleepTimer() {
       if (sleepTimerTimeout) clearTimeout(sleepTimerTimeout);
       sleepTimerTimeout = null;
+      stopAfterCurrentTrack = false;
       document.getElementById('sleep-timer-label').textContent = "Sleep Timer";
       closeSleepTimerModal();
     }
