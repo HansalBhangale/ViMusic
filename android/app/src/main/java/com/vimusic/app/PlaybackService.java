@@ -72,6 +72,8 @@ public final class PlaybackService extends MediaSessionService {
                         true
                 )
                 .setHandleAudioBecomingNoisy(true)
+                // Hold a CPU wake lock while foreground audio playback continues with screen off.
+                .setWakeMode(C.WAKE_MODE_LOCAL)
                 .build();
 
         exoPlayer.setRepeatMode(Player.REPEAT_MODE_OFF);

@@ -3,6 +3,8 @@ name: Build ViMusic Android APK
 on:
   push:
     branches: [ main, master, feature/native-media3-foundation ]
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch: # Allows manual trigger from GitHub Actions web UI
 
 jobs:
