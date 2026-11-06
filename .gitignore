@@ -23,3 +23,11 @@ local.properties
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Executables & Binaries
+*.exe
+cloudflared*
+
+# Cookies & Credentials
+*cookies*.txt
+

@@ -3,6 +3,7 @@ import time
 import re
 import os
 import tempfile
+import base64
 from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
@@ -26,6 +27,39 @@ static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "stat
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+# Suppress false-alarm stderr noise during multi-strategy rotation
+class QuietLogger:
+    def debug(self, msg): pass
+    def info(self, msg): pass
+    def warning(self, msg): pass
+    def error(self, msg): pass
+
+# Setup optional persistent YouTube Cookies (from environment variable or file)
+COOKIES_FILE = None
+raw_cookies = os.environ.get("YOUTUBE_COOKIES", "").strip()
+if raw_cookies:
+    try:
+        if os.path.isfile(raw_cookies):
+            COOKIES_FILE = os.path.abspath(raw_cookies)
+        else:
+            cookie_content = raw_cookies
+            # Support base64 encoded cookies to prevent environment newline mangling
+            if not raw_cookies.startswith("#") and "\n" not in raw_cookies and len(raw_cookies) > 50:
+                try:
+                    decoded = base64.b64decode(raw_cookies).decode("utf-8", errors="ignore")
+                    if "youtube.com" in decoded or "# Netscape" in decoded:
+                        cookie_content = decoded
+                except Exception:
+                    pass
+            temp_cookie_path = os.path.join(tempfile.gettempdir(), "yt_cookies.txt")
+            with open(temp_cookie_path, "w", encoding="utf-8") as f:
+                f.write(cookie_content)
+            if os.path.exists(temp_cookie_path) and os.path.getsize(temp_cookie_path) > 10:
+                COOKIES_FILE = temp_cookie_path
+                print(f"[ViMusic] Loaded YouTube cookies from environment ({os.path.getsize(COOKIES_FILE)} bytes)")
+    except Exception as e:
+        print(f"[ViMusic] Failed to configure YouTube cookies: {e}")
+
 # In-memory cache for stream URLs: video_id -> { "url": str, "expires": float, "title": str, ... }
 stream_cache = {}
 trending_cache = {"expires": 0, "tracks": []}
@@ -34,20 +68,10 @@ ydl_search_opts = {
     'quiet': True,
     'no_warnings': True,
     'extract_flat': True,
+    'logger': QuietLogger(),
 }
-
-ydl_extract_opts = {
-    'format': 'ba[ext=m4a]/ba/b',
-    'quiet': True,
-    'no_warnings': True,
-    'skip_download': True,
-    'extractor_args': {
-        'youtube': {
-            'player_client': ['android', 'tv_downgraded', 'web_embedded', 'mweb'],
-            'player_skip': ['webpage']
-        }
-    }
-}
+if COOKIES_FILE:
+    ydl_search_opts['cookiefile'] = COOKIES_FILE
 
 @app.get("/")
 async def serve_index():
@@ -58,7 +82,12 @@ async def serve_index():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "engine": "vimusic-yt-streamer", "version": "2.1-bot-bypass"}
+    return {
+        "status": "ok",
+        "engine": "vimusic-yt-streamer",
+        "version": "2.2-cloud-resilient",
+        "has_cookies": bool(COOKIES_FILE)
+    }
 
 @app.get("/api/search")
 async def search(q: str, limit: int = 35):
@@ -68,7 +97,8 @@ async def search(q: str, limit: int = 35):
     limit = max(5, min(limit, 60))
     loop = asyncio.get_event_loop()
     def _search():
-        with yt_dlp.YoutubeDL(ydl_search_opts) as ydl:
+        opts = dict(ydl_search_opts)
+        with yt_dlp.YoutubeDL(opts) as ydl:
             res = ydl.extract_info(f"ytsearch{limit}:{q}", download=False)
             tracks = []
             for item in res.get("entries", []):
@@ -94,16 +124,24 @@ async def search(q: str, limit: int = 35):
 async def get_radio(video_id: str, title: str = "", artist: str = ""):
     loop = asyncio.get_event_loop()
     def _fetch_radio():
-        # 1. Official YouTube Music algorithmic radio playlist RD{video_id}
+        # 1. Official YouTube Music algorithmic radio playlist RD{video_id} using visionos client
         url = f"https://www.youtube.com/watch?v={video_id}&list=RD{video_id}"
-        opts = {
+        radio_opts = {
             'quiet': True,
             'no_warnings': True,
             'extract_flat': True,
-            'playlist_items': '1-16'
+            'playlist_items': '1-16',
+            'logger': QuietLogger(),
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['visionos', 'android']
+                }
+            }
         }
+        if COOKIES_FILE:
+            radio_opts['cookiefile'] = COOKIES_FILE
         try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
+            with yt_dlp.YoutubeDL(radio_opts) as ydl:
                 res = ydl.extract_info(url, download=False)
                 tracks = []
                 for item in res.get("entries", []):
@@ -131,23 +169,27 @@ async def get_radio(video_id: str, title: str = "", artist: str = ""):
         clean_artist = re.sub(r'\(.*?\)|\[.*?\]', '', artist).strip()
         query = f"{clean_artist} {clean_title} songs similar"
         
-        with yt_dlp.YoutubeDL(ydl_search_opts) as ydl:
-            res = ydl.extract_info(f"ytsearch12:{query}", download=False)
-            tracks = []
-            for item in res.get("entries", []):
-                if not item or item.get("id") == video_id:
-                    continue
-                thumb = None
-                if item.get("thumbnails"):
-                    thumb = item["thumbnails"][-1].get("url")
-                tracks.append({
-                    "id": item.get("id"),
-                    "title": item.get("title"),
-                    "artist": item.get("uploader") or item.get("channel") or "Unknown Artist",
-                    "duration": item.get("duration") or 0,
-                    "thumbnail": thumb or f"https://i.ytimg.com/vi/{item.get('id')}/hqdefault.jpg"
-                })
-            return tracks
+        search_opts = dict(ydl_search_opts)
+        try:
+            with yt_dlp.YoutubeDL(search_opts) as ydl:
+                res = ydl.extract_info(f"ytsearch12:{query}", download=False)
+                tracks = []
+                for item in res.get("entries", []):
+                    if not item or item.get("id") == video_id:
+                        continue
+                    thumb = None
+                    if item.get("thumbnails"):
+                        thumb = item["thumbnails"][-1].get("url")
+                    tracks.append({
+                        "id": item.get("id"),
+                        "title": item.get("title"),
+                        "artist": item.get("uploader") or item.get("channel") or "Unknown Artist",
+                        "duration": item.get("duration") or 0,
+                        "thumbnail": thumb or f"https://i.ytimg.com/vi/{item.get('id')}/hqdefault.jpg"
+                    })
+                return tracks
+        except Exception:
+            return []
 
     results = await loop.run_in_executor(None, _fetch_radio)
     return results
@@ -161,28 +203,32 @@ async def get_trending():
     loop = asyncio.get_event_loop()
     def _fetch():
         query = "ytsearch25:top songs viral global music"
-        with yt_dlp.YoutubeDL(ydl_search_opts) as ydl:
-            res = ydl.extract_info(query, download=False)
-            tracks = []
-            for item in res.get("entries", []):
-                if not item:
-                    continue
-                dur = item.get("duration") or 0
-                if dur > 600 or dur < 60:
-                    continue
-                thumb = None
-                if item.get("thumbnails"):
-                    thumb = item["thumbnails"][-1].get("url")
-                tracks.append({
-                    "id": item.get("id"),
-                    "title": item.get("title"),
-                    "artist": item.get("uploader") or item.get("channel") or "Unknown Artist",
-                    "duration": dur,
-                    "thumbnail": thumb or f"https://i.ytimg.com/vi/{item.get('id')}/hqdefault.jpg"
-                })
-                if len(tracks) >= 12:
-                    break
-            return tracks
+        opts = dict(ydl_search_opts)
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                res = ydl.extract_info(query, download=False)
+                tracks = []
+                for item in res.get("entries", []):
+                    if not item:
+                        continue
+                    dur = item.get("duration") or 0
+                    if dur > 600 or dur < 60:
+                        continue
+                    thumb = None
+                    if item.get("thumbnails"):
+                        thumb = item["thumbnails"][-1].get("url")
+                    tracks.append({
+                        "id": item.get("id"),
+                        "title": item.get("title"),
+                        "artist": item.get("uploader") or item.get("channel") or "Unknown Artist",
+                        "duration": dur,
+                        "thumbnail": thumb or f"https://i.ytimg.com/vi/{item.get('id')}/hqdefault.jpg"
+                    })
+                    if len(tracks) >= 12:
+                        break
+                return tracks
+        except Exception:
+            return []
 
     tracks = await loop.run_in_executor(None, _fetch)
     trending_cache["tracks"] = tracks
@@ -199,43 +245,62 @@ def get_stream_url(video_id: str):
     last_err = None
 
     # Multi-client extraction rotation to bypass datacenter/cloud IP bot walls (e.g. Render, Railway)
+    # Strategy 1: visionos dedicated client (bypasses bot challenges on cloud datacenter IPs)
     extraction_strategies = [
-        # Strategy 1: Android / TV / Embedded client rotation (safest for datacenter IPs)
         {
             'format': 'ba[ext=m4a]/ba/b',
             'quiet': True,
             'no_warnings': True,
             'skip_download': True,
+            'logger': QuietLogger(),
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'tv_downgraded', 'web_embedded', 'mweb'],
+                    'player_client': ['visionos'],
                     'player_skip': ['webpage']
                 }
             }
         },
-        # Strategy 2: iOS / Mobile Web client fallback
+        # Strategy 2: visionos + android fallback
+        {
+            'format': 'ba[ext=m4a]/140/ba/18/b',
+            'quiet': True,
+            'no_warnings': True,
+            'skip_download': True,
+            'logger': QuietLogger(),
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['visionos', 'android'],
+                    'player_skip': ['webpage']
+                }
+            }
+        },
+        # Strategy 3: android + tv_downgraded fallback
+        {
+            'format': 'ba[ext=m4a]/ba/b',
+            'quiet': True,
+            'no_warnings': True,
+            'skip_download': True,
+            'logger': QuietLogger(),
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'tv_downgraded', 'mweb'],
+                    'player_skip': ['webpage']
+                }
+            }
+        },
+        # Strategy 4: Standard extract fallback
         {
             'format': 'ba/b',
             'quiet': True,
             'no_warnings': True,
             'skip_download': True,
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['ios', 'mweb'],
-                    'player_skip': ['webpage']
-                }
-            }
-        },
-        # Strategy 3: Standard extract fallback
-        {
-            'format': 'ba/b',
-            'quiet': True,
-            'no_warnings': True,
-            'skip_download': True
+            'logger': QuietLogger()
         }
     ]
 
     for strat in extraction_strategies:
+        if COOKIES_FILE:
+            strat['cookiefile'] = COOKIES_FILE
         try:
             with yt_dlp.YoutubeDL(strat) as ydl:
                 res = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
@@ -247,9 +312,9 @@ def get_stream_url(video_id: str):
             continue
 
     if not info or not info.get("url"):
-        # Auto-fallback for age-restricted / geoblocked music videos
+        # Auto-fallback for age-restricted / geoblocked / flagged music videos
         err_msg = str(last_err).lower()
-        if "age" in err_msg or "inappropriate" in err_msg or "unavailable" in err_msg:
+        if "age" in err_msg or "inappropriate" in err_msg or "unavailable" in err_msg or "sign in" in err_msg:
             try:
                 # Use public oEmbed to get title and artist
                 with httpx.Client(timeout=4.0) as client:
@@ -259,7 +324,10 @@ def get_stream_url(video_id: str):
                         song_title = meta.get("title", "")
                         song_author = meta.get("author_name", "")
                         search_q = f"{song_title} {song_author} audio"
-                        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
+                        fb_opts = {'quiet': True, 'extract_flat': True, 'logger': QuietLogger()}
+                        if COOKIES_FILE:
+                            fb_opts['cookiefile'] = COOKIES_FILE
+                        with yt_dlp.YoutubeDL(fb_opts) as ydl:
                             s = ydl.extract_info(f"ytsearch3:{search_q}", download=False)
                             for entry in s.get("entries", []):
                                 alt_id = entry.get("id")
@@ -309,6 +377,19 @@ async def stream(video_id: str, request: Request):
     client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
     req = client.build_request("GET", stream_url, headers=headers)
     upstream_response = await client.send(req, stream=True)
+
+    # If cached URL expired or returned 403/410, invalidate cache and retry once
+    if upstream_response.status_code in (403, 410):
+        await upstream_response.aclose()
+        stream_cache.pop(video_id, None)
+        try:
+            info = await loop.run_in_executor(None, get_stream_url, video_id)
+            stream_url = info["url"]
+            req = client.build_request("GET", stream_url, headers=headers)
+            upstream_response = await client.send(req, stream=True)
+        except Exception as retry_err:
+            await client.aclose()
+            raise HTTPException(status_code=500, detail=f"Stream refresh failed: {retry_err}")
 
     async def stream_generator():
         try:
