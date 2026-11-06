@@ -186,6 +186,7 @@ public final class NativeMusicPlayerPlugin extends Plugin implements Player.List
             MediaItem.Builder item = new MediaItem.Builder()
                     .setMediaId(id)
                     .setUri(Uri.parse(streamUrl))
+                    .setCustomCacheKey(id)
                     .setMediaMetadata(metadata.build());
 
             String mimeType = track.optString("mimeType", "");
@@ -318,9 +319,17 @@ public final class NativeMusicPlayerPlugin extends Plugin implements Player.List
     @PluginMethod
     public void seekToNext(PluginCall call) {
         withController(call, mediaController -> {
-            if (mediaController.hasNextMediaItem()) {
+            int count = mediaController.getMediaItemCount();
+            int index = mediaController.getCurrentMediaItemIndex();
+
+            if (count > 0 && mediaController.getRepeatMode() == Player.REPEAT_MODE_ONE) {
+                mediaController.seekTo(index, 0L);
+            } else if (mediaController.hasNextMediaItem()) {
                 mediaController.seekToNextMediaItem();
+            } else if (count > 0 && mediaController.getRepeatMode() == Player.REPEAT_MODE_ALL) {
+                mediaController.seekTo(0, 0L);
             }
+
             call.resolve(snapshot(mediaController));
         });
     }
@@ -328,11 +337,19 @@ public final class NativeMusicPlayerPlugin extends Plugin implements Player.List
     @PluginMethod
     public void seekToPrevious(PluginCall call) {
         withController(call, mediaController -> {
-            if (mediaController.hasPreviousMediaItem()) {
-                mediaController.seekToPreviousMediaItem();
-            } else if (mediaController.getCurrentPosition() > 4000L) {
+            int count = mediaController.getMediaItemCount();
+            int index = mediaController.getCurrentMediaItemIndex();
+
+            if (mediaController.getCurrentPosition() > 4000L) {
                 mediaController.seekTo(0L);
+            } else if (mediaController.hasPreviousMediaItem()) {
+                mediaController.seekToPreviousMediaItem();
+            } else if (count > 0 && mediaController.getRepeatMode() == Player.REPEAT_MODE_ALL) {
+                mediaController.seekTo(count - 1, 0L);
+            } else if (count > 0) {
+                mediaController.seekTo(index, 0L);
             }
+
             call.resolve(snapshot(mediaController));
         });
     }
@@ -439,6 +456,23 @@ public final class NativeMusicPlayerPlugin extends Plugin implements Player.List
         if (current != null && current.isPlaying()) {
             progressHandler.postDelayed(progressTicker, 500L);
         }
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        progressHandler.removeCallbacksAndMessages(null);
+
+        if (controller != null) {
+            controller.removeListener(this);
+        }
+
+        if (controllerFuture != null) {
+            MediaController.releaseFuture(controllerFuture);
+            controllerFuture = null;
+            controller = null;
+        }
+
+        super.handleOnDestroy();
     }
 
     @Override
