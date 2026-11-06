@@ -2,6 +2,8 @@ package com.vimusic.app;
 
 import android.content.ComponentName;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -47,6 +49,20 @@ public final class NativeMusicPlayerPlugin extends Plugin implements Player.List
     @Nullable
     private ListenableFuture<MediaController> controllerFuture;
 
+    private final Handler progressHandler = new Handler(Looper.getMainLooper());
+
+    private final Runnable progressTicker = new Runnable() {
+        @Override
+        public void run() {
+            MediaController current = controller;
+            if (current == null || !current.isPlaying()) {
+                return;
+            }
+            notifyListeners("playbackProgress", snapshot(current));
+            progressHandler.postDelayed(this, 500L);
+        }
+    };
+
     @Override
     public void load() {
         super.load();
@@ -63,12 +79,13 @@ public final class NativeMusicPlayerPlugin extends Plugin implements Player.List
                 new ComponentName(getContext(), PlaybackService.class)
         );
 
-        controllerFuture = new MediaController.Builder(getContext(), sessionToken)
-                .buildAsync();
+        ListenableFuture<MediaController> future =
+                new MediaController.Builder(getContext(), sessionToken).buildAsync();
+        controllerFuture = future;
 
-        controllerFuture.addListener(() -> {
+        future.addListener(() -> {
             try {
-                MediaController connected = controllerFuture.get();
+                MediaController connected = future.get();
                 controller = connected;
                 connected.addListener(this);
                 notifyListeners("playbackState", snapshot(connected));
@@ -368,13 +385,66 @@ public final class NativeMusicPlayerPlugin extends Plugin implements Player.List
     }
 
     @PluginMethod
+    public void setVolume(PluginCall call) {
+        withController(call, mediaController -> {
+            float volume = call.getFloat("volume", 1.0f);
+            if (volume < 0.0f || volume > 1.0f) {
+                throw new IllegalArgumentException("Volume must be between 0 and 1");
+            }
+            mediaController.setVolume(volume);
+            call.resolve(snapshot(mediaController));
+        });
+    }
+
+    @PluginMethod
     public void getState(PluginCall call) {
         withController(call, mediaController -> call.resolve(snapshot(mediaController)));
+    }
+
+    @PluginMethod
+    public void getQueue(PluginCall call) {
+        withController(call, mediaController -> {
+            JSArray tracks = new JSArray();
+
+            for (int index = 0; index < mediaController.getMediaItemCount(); index++) {
+                MediaItem item = mediaController.getMediaItemAt(index);
+                JSObject track = new JSObject();
+
+                track.put("id", item.mediaId);
+                track.put("title", item.mediaMetadata.title != null
+                        ? item.mediaMetadata.title.toString()
+                        : "");
+                track.put("artist", item.mediaMetadata.artist != null
+                        ? item.mediaMetadata.artist.toString()
+                        : "");
+                track.put("thumbnail", item.mediaMetadata.artworkUri != null
+                        ? item.mediaMetadata.artworkUri.toString()
+                        : "");
+                track.put("streamUrl", item.localConfiguration != null
+                        ? item.localConfiguration.uri.toString()
+                        : "");
+
+                tracks.put(track);
+            }
+
+            JSObject result = snapshot(mediaController);
+            result.put("tracks", tracks);
+            call.resolve(result);
+        });
+    }
+
+    private void updateProgressTicker() {
+        progressHandler.removeCallbacks(progressTicker);
+        MediaController current = controller;
+        if (current != null && current.isPlaying()) {
+            progressHandler.postDelayed(progressTicker, 500L);
+        }
     }
 
     @Override
     public void onEvents(@NonNull Player player, @NonNull Player.Events events) {
         notifyListeners("playbackState", snapshot(player));
+        updateProgressTicker();
     }
 
     @Override
@@ -382,6 +452,7 @@ public final class NativeMusicPlayerPlugin extends Plugin implements Player.List
         MediaController current = controller;
         if (current != null) {
             notifyListeners("trackChanged", snapshot(current));
+            updateProgressTicker();
         }
     }
 
@@ -391,5 +462,6 @@ public final class NativeMusicPlayerPlugin extends Plugin implements Player.List
         event.put("code", error.errorCode);
         event.put("message", error.getMessage() != null ? error.getMessage() : "Audio playback failed");
         notifyListeners("playbackError", event);
+        updateProgressTicker();
     }
 }
