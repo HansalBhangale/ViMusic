@@ -247,8 +247,8 @@ def get_stream_url(video_id: str):
             'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'skip_download': True,
             'extractor_args': {
-                'youtube': {
-                    'player_client': ['mweb']
+            'youtube': {
+                'player_client': ['mweb', 'tv', 'web_safari']
                 }
             }
         },
