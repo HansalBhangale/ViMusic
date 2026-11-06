@@ -68,7 +68,7 @@ BASE_OPTS = {
     'quiet': True,
     'no_warnings': True,
     'logger': QuietLogger(),
-    'socket_timeout': 10,
+    'socket_timeout': 5,
     'js_runtimes': {'node': {}},
     'remote_components': {'ejs:github'},
 }
@@ -92,7 +92,7 @@ def health():
     return {
         "status": "ok",
         "engine": "vimusic-yt-streamer",
-        "version": "2.5-cloud-resilient",
+        "version": "2.6-timeout-shield",
         "ytdlp_version": getattr(yt_dlp.version, "__version__", "unknown"),
         "has_cookies": bool(COOKIES_FILE)
     }
@@ -132,51 +132,19 @@ async def search(q: str, limit: int = 35):
 async def get_radio(video_id: str, title: str = "", artist: str = ""):
     loop = asyncio.get_event_loop()
     def _fetch_radio():
-        # 1. Official YouTube Music algorithmic radio playlist RD{video_id} using visionos client
-        url = f"https://www.youtube.com/watch?v={video_id}&list=RD{video_id}"
-        radio_opts = {
-            **BASE_OPTS,
-            'extract_flat': True,
-            'playlist_items': '1-16',
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['visionos', 'android']
-                }
-            }
-        }
-        try:
-            with yt_dlp.YoutubeDL(radio_opts) as ydl:
-                res = ydl.extract_info(url, download=False)
-                tracks = []
-                for item in res.get("entries", []):
-                    if not item or item.get("id") == video_id:
-                        continue
-                    thumb = None
-                    if item.get("thumbnails"):
-                        thumb = item["thumbnails"][-1].get("url")
-                    tracks.append({
-                        "id": item.get("id"),
-                        "title": item.get("title"),
-                        "artist": item.get("uploader") or item.get("channel") or "Unknown Artist",
-                        "duration": item.get("duration") or 0,
-                        "thumbnail": thumb or f"https://i.ytimg.com/vi/{item.get('id')}/hqdefault.jpg"
-                    })
-                    if len(tracks) >= 12:
-                        break
-                if len(tracks) >= 4:
-                    return tracks
-        except Exception:
-            pass
-
-        # 2. Fallback search query if playlist extraction fails
+        # Fast algorithmic search recommendations (prevents 502 gateway timeouts on datacenter IPs)
         clean_title = re.sub(r'\(.*?\)|\[.*?\]', '', title).strip()
         clean_artist = re.sub(r'\(.*?\)|\[.*?\]', '', artist).strip()
-        query = f"{clean_artist} {clean_title} songs similar"
+        query = f"{clean_artist} {clean_title} songs"
         
-        search_opts = dict(ydl_search_opts)
+        search_opts = {
+            **BASE_OPTS,
+            'extract_flat': True,
+            'socket_timeout': 4
+        }
         try:
             with yt_dlp.YoutubeDL(search_opts) as ydl:
-                res = ydl.extract_info(f"ytsearch12:{query}", download=False)
+                res = ydl.extract_info(f"ytsearch10:{query}", download=False)
                 tracks = []
                 for item in res.get("entries", []):
                     if not item or item.get("id") == video_id:
@@ -191,6 +159,8 @@ async def get_radio(video_id: str, title: str = "", artist: str = ""):
                         "duration": item.get("duration") or 0,
                         "thumbnail": thumb or f"https://i.ytimg.com/vi/{item.get('id')}/hqdefault.jpg"
                     })
+                    if len(tracks) >= 8:
+                        break
                 return tracks
         except Exception:
             return []
@@ -478,7 +448,7 @@ async def get_lyrics(artist: str = "", title: str = "", duration: int = 0):
     clean_title = re.sub(r'\(.*?\)|\[.*?\]', '', title).strip()
     clean_artist = re.sub(r'\(.*?\)|\[.*?\]', '', artist).strip()
     
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=3.5) as client:
         try:
             url = f"https://lrclib.net/api/get?artist_name={clean_artist}&track_name={clean_title}"
             if duration:
