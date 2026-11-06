@@ -37,10 +37,16 @@ ydl_search_opts = {
 }
 
 ydl_extract_opts = {
-    'format': 'ba[ext=m4a]/ba',
+    'format': 'ba[ext=m4a]/ba/b',
     'quiet': True,
     'no_warnings': True,
     'skip_download': True,
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['android', 'tv_downgraded', 'web_embedded', 'mweb'],
+            'player_skip': ['webpage']
+        }
+    }
 }
 
 @app.get("/")
@@ -189,26 +195,78 @@ def get_stream_url(video_id: str):
     if cached and cached["expires"] > now:
         return cached
 
-    with yt_dlp.YoutubeDL(ydl_extract_opts) as ydl:
-        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-        url = info["url"]
-        thumb = None
-        if info.get("thumbnails"):
-            thumb = info["thumbnails"][-1].get("url")
-            
-        entry = {
-            "url": url,
-            "title": info.get("title", ""),
-            "artist": info.get("uploader") or info.get("channel") or "Unknown Artist",
-            "album": info.get("album") or "YouTube Music",
-            "duration": info.get("duration", 0),
-            "thumbnail": thumb or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
-            "filesize": info.get("filesize") or info.get("filesize_approx") or 0,
-            "mime_type": info.get("mimeType", "audio/mp4"),
-            "expires": now + 4 * 3600 # 4 hours
+    info = None
+    last_err = None
+
+    # Multi-client extraction rotation to bypass datacenter/cloud IP bot walls (e.g. Render, Railway)
+    extraction_strategies = [
+        # Strategy 1: Android / TV / Embedded client rotation (safest for datacenter IPs)
+        {
+            'format': 'ba[ext=m4a]/ba/b',
+            'quiet': True,
+            'no_warnings': True,
+            'skip_download': True,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'tv_downgraded', 'web_embedded', 'mweb'],
+                    'player_skip': ['webpage']
+                }
+            }
+        },
+        # Strategy 2: iOS / Mobile Web client fallback
+        {
+            'format': 'ba/b',
+            'quiet': True,
+            'no_warnings': True,
+            'skip_download': True,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['ios', 'mweb'],
+                    'player_skip': ['webpage']
+                }
+            }
+        },
+        # Strategy 3: Standard extract fallback
+        {
+            'format': 'ba/b',
+            'quiet': True,
+            'no_warnings': True,
+            'skip_download': True
         }
-        stream_cache[video_id] = entry
-        return entry
+    ]
+
+    for strat in extraction_strategies:
+        try:
+            with yt_dlp.YoutubeDL(strat) as ydl:
+                res = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+                if res and res.get("url"):
+                    info = res
+                    break
+        except Exception as e:
+            last_err = e
+            continue
+
+    if not info or not info.get("url"):
+        raise HTTPException(status_code=500, detail=f"Failed to stream video: {last_err}")
+
+    url = info["url"]
+    thumb = None
+    if info.get("thumbnails"):
+        thumb = info["thumbnails"][-1].get("url")
+        
+    entry = {
+        "url": url,
+        "title": info.get("title", ""),
+        "artist": info.get("uploader") or info.get("channel") or "Unknown Artist",
+        "album": info.get("album") or "YouTube Music",
+        "duration": info.get("duration", 0),
+        "thumbnail": thumb or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
+        "filesize": info.get("filesize") or info.get("filesize_approx") or 0,
+        "mime_type": "audio/mp4",
+        "expires": now + 4 * 3600 # 4 hours
+    }
+    stream_cache[video_id] = entry
+    return entry
 
 @app.get("/api/stream/{video_id}")
 async def stream(video_id: str, request: Request):
@@ -239,8 +297,12 @@ async def stream(video_id: str, request: Request):
             await upstream_response.aclose()
             await client.aclose()
 
+    content_type = upstream_response.headers.get("Content-Type", "audio/mp4")
+    if "video/" in content_type:
+        content_type = "audio/mp4"
+
     response_headers = {
-        "Content-Type": upstream_response.headers.get("Content-Type", "audio/mp4"),
+        "Content-Type": content_type,
         "Accept-Ranges": "bytes",
         "Cache-Control": "public, max-age=14400"
     }

@@ -1357,10 +1357,12 @@
 
       // Connect direct stream URL
       audio.src = apiUrl(`/api/stream/${track.id}`);
+      audio.load();
       audio.play().then(() => {
         setPlayingUI(true);
       }).catch(err => {
         console.log('Playback start error:', err);
+        setPlayingUI(false);
       });
 
       // Update MediaSession
@@ -1473,6 +1475,27 @@
     }
 
     // Audio Events
+    audio.addEventListener('playing', () => {
+      setPlayingUI(true);
+    });
+
+    audio.addEventListener('pause', () => {
+      if (!audio.seeking) setPlayingUI(false);
+    });
+
+    audio.addEventListener('error', () => {
+      console.error('Audio playback error:', audio.error);
+      setPlayingUI(false);
+      const code = audio.error ? audio.error.code : 0;
+      let msg = "Could not stream audio.";
+      if (code === 4) {
+        msg = "Stream failed: backend or YouTube could not extract audio.";
+      } else if (code === 2) {
+        msg = "Network connection failed while streaming audio.";
+      }
+      alertToast(`⚠️ ${msg}`);
+    });
+
     audio.addEventListener('timeupdate', () => {
       if (!audio.duration) return;
       const cur = audio.currentTime;
