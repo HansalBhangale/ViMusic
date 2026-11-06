@@ -8,6 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="manifest" href="/static/manifest.webmanifest">
   <link rel="icon" href="/static/icons/vimusic.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icons/vimusic-192.png">
   <title>ViMusic - Free Music Streamer & MP3</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -923,12 +924,8 @@
     }
 
     function getApiBaseUrl() {
-      const custom = localStorage.getItem('vimusic_custom_server');
-      if (custom && custom.trim()) {
-        return normalizeServerUrl(custom);
-      }
-
-      // Same-origin loopback is used by the on-device Termux deployment.
+      // A Termux-hosted PWA must always talk to its own loopback origin,
+      // even if an older custom backend URL is stored in localStorage.
       const origin = window.location.origin;
       const host = window.location.hostname;
       const isLocalCapacitor = origin.includes('localhost') && (!window.location.port || window.location.port === '80' || window.location.port === '443');
@@ -936,8 +933,13 @@
       const isLoopbackHost = host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
 
       if (!isLocalCapacitor && !isCapacitorScheme && window.location.protocol.startsWith('http') &&
-          (window.location.port === '8000' || window.location.port === '8765' || isLoopbackHost)) {
+          (isLoopbackHost || window.location.port === '8000' || window.location.port === '8765')) {
         return origin;
+      }
+
+      const custom = localStorage.getItem('vimusic_custom_server');
+      if (custom && custom.trim()) {
+        return normalizeServerUrl(custom);
       }
 
       // Default fallback for the native APK / manually configured backend.

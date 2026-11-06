@@ -2,7 +2,9 @@ const CACHE_NAME = "vimusic-shell-v1";
 const APP_SHELL = [
   "/",
   "/static/manifest.webmanifest",
-  "/static/icons/vimusic.svg"
+  "/static/icons/vimusic.svg",
+  "/static/icons/vimusic-192.png",
+  "/static/icons/vimusic-512.png"
 ];
 
 self.addEventListener("install", (event) => {
