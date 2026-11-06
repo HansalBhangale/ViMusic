@@ -3,6 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#09090b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/vimusic.svg" type="image/svg+xml">
   <title>ViMusic - Free Music Streamer & MP3</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -923,16 +928,19 @@
         return normalizeServerUrl(custom);
       }
 
-      // Check if running on desktop browser connecting directly to python server
+      // Same-origin loopback is used by the on-device Termux deployment.
       const origin = window.location.origin;
+      const host = window.location.hostname;
       const isLocalCapacitor = origin.includes('localhost') && (!window.location.port || window.location.port === '80' || window.location.port === '443');
       const isCapacitorScheme = origin.startsWith('capacitor:') || origin.startsWith('file:') || origin.includes('ionic:');
+      const isLoopbackHost = host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
 
-      if (!isLocalCapacitor && !isCapacitorScheme && window.location.protocol.startsWith('http') && window.location.port === '8000') {
+      if (!isLocalCapacitor && !isCapacitorScheme && window.location.protocol.startsWith('http') &&
+          (window.location.port === '8000' || window.location.port === '8765' || isLoopbackHost)) {
         return origin;
       }
 
-      // Default fallback for Android APK
+      // Default fallback for the native APK / manually configured backend.
       return 'http://10.208.66.48:8000';
     }
 
@@ -2488,6 +2496,15 @@
         toast.classList.add('opacity-0');
         setTimeout(() => toast.remove(), 300);
       }, 2500);
+    }
+  </script>
+
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/service-worker.js", { scope: "/" })
+          .catch((error) => console.warn("ViMusic service worker registration failed:", error));
+      });
     }
   </script>
 </body>
