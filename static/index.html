@@ -744,11 +744,129 @@
 
   <!-- APP STATE SCRIPT -->
   <script>
-    // Audio engine & DOM elements
-    const audio = document.getElementById('audio-engine');
+    // Audio engine & DOM elements.
+    // Android uses the native Media3 player; desktop browsers keep HTMLAudioElement.
+    const htmlAudio = document.getElementById('audio-engine');
+    const nativeMusicPlayer = window.Capacitor?.Plugins?.NativeMusicPlayer || null;
+    const useNativePlayback = Boolean(
+      nativeMusicPlayer &&
+      window.Capacitor?.getPlatform?.() === 'android'
+    );
+
+    class NativeAudioFacade extends EventTarget {
+      constructor(plugin) {
+        super();
+        this.plugin = plugin;
+        this._src = '';
+        this._paused = true;
+        this._currentTime = 0;
+        this._duration = 0;
+        this._volume = 1;
+        this._playbackRate = 1;
+        this._seeking = false;
+        this.error = null;
+        this._lastPlaybackState = 0;
+      }
+
+      get src() { return this._src; }
+      set src(value) { this._src = String(value || ''); }
+
+      get paused() { return this._paused; }
+      get currentTime() { return this._currentTime; }
+      set currentTime(value) {
+        const seconds = Math.max(0, Number(value) || 0);
+        this._currentTime = seconds;
+        this._seeking = true;
+        this.dispatchEvent(new Event('seeking'));
+        this.plugin.seekTo({ positionMs: Math.round(seconds * 1000) })
+          .then(snapshot => this.applySnapshot(snapshot))
+          .catch(error => console.error('Native seek failed:', error))
+          .finally(() => {
+            this._seeking = false;
+            this.dispatchEvent(new Event('seeked'));
+          });
+      }
+
+      get duration() { return this._duration; }
+      get seeking() { return this._seeking; }
+
+      get volume() { return this._volume; }
+      set volume(value) {
+        this._volume = Math.max(0, Math.min(1, Number(value) || 0));
+        this.plugin.setVolume({ volume: this._volume })
+          .catch(error => console.error('Native volume change failed:', error));
+      }
+
+      get playbackRate() { return this._playbackRate; }
+      set playbackRate(value) {
+        this._playbackRate = Number(value) || 1;
+        this.plugin.setPlaybackSpeed({ speed: this._playbackRate })
+          .catch(error => console.error('Native playback speed change failed:', error));
+      }
+
+      load() {
+        // Media3 prepares MediaItems through the native bridge.
+      }
+
+      removeAttribute(name) {
+        if (name === 'src') this._src = '';
+      }
+
+      play() {
+        return this.plugin.play().then(snapshot => {
+          this.applySnapshot(snapshot);
+          return undefined;
+        });
+      }
+
+      pause() {
+        this._paused = true;
+        return this.plugin.pause().then(snapshot => {
+          this.applySnapshot(snapshot);
+          return undefined;
+        }).catch(error => {
+          console.warn('Native pause request failed:', error);
+        });
+      }
+
+      applySnapshot(snapshot) {
+        if (!snapshot) return;
+
+        const wasPaused = this._paused;
+        const wasEnded = this._lastPlaybackState === 4;
+
+        this._paused = !snapshot.playWhenReady;
+        this._currentTime = Math.max(0, Number(snapshot.currentPosition) || 0) / 1000;
+        this._duration = Math.max(0, Number(snapshot.duration) || 0) / 1000;
+        this._lastPlaybackState = Number(snapshot.playbackState) || 0;
+
+        if (snapshot.isPlaying && (wasPaused || !wasEnded)) {
+          this.dispatchEvent(new Event('playing'));
+        } else if (this._paused && !wasPaused) {
+          this.dispatchEvent(new Event('pause'));
+        }
+
+        if (this._lastPlaybackState === 4 && !wasEnded) {
+          this.dispatchEvent(new Event('ended'));
+        }
+
+        this.dispatchEvent(new Event('timeupdate'));
+      }
+
+      emitError(message) {
+        this.error = { code: 2, message: String(message || 'Native audio playback failed') };
+        this.dispatchEvent(new Event('error'));
+      }
+    }
+
+    const audio = useNativePlayback
+      ? new NativeAudioFacade(nativeMusicPlayer)
+      : htmlAudio;
+
     // Incremented whenever playback is replaced or cancelled.
     // This prevents an old play() promise from updating the new track's UI.
     let playbackRequestId = 0;
+    let activeNativeTrackId = null;
     let stopAfterCurrentTrack = false;
     const miniThumb = document.getElementById('mini-thumb');
     const miniThumbPlaceholder = document.getElementById('mini-thumb-placeholder');
@@ -986,6 +1104,124 @@
       history: JSON.parse(localStorage.getItem('vimusic_history') || '[]'),
     };
 
+    function mapNativeTrack(track) {
+      return {
+        id: track.id,
+        title: track.title || 'Unknown title',
+        artist: track.artist || 'Unknown artist',
+        thumbnail: track.thumbnail || track.artworkUrl || '',
+        duration: Number(track.duration) || 0
+      };
+    }
+
+    function syncNativeTrack(snapshot) {
+      if (!useNativePlayback || !snapshot) return;
+
+      if (snapshot.mediaId) {
+        const index = state.queue.findIndex(track => track.id === snapshot.mediaId);
+        if (index >= 0) state.currentIndex = index;
+
+        let track = state.queue[state.currentIndex];
+        if (!track || track.id !== snapshot.mediaId) {
+          track = {
+            id: snapshot.mediaId,
+            title: snapshot.title || 'Unknown title',
+            artist: snapshot.artist || 'Unknown artist',
+            thumbnail: snapshot.artworkUrl || '',
+            duration: 0
+          };
+          if (state.currentIndex < 0) {
+            state.queue = [track];
+            state.currentIndex = 0;
+          }
+        }
+
+        if (activeNativeTrackId !== track.id) {
+          activeNativeTrackId = track.id;
+          miniTitle.textContent = track.title;
+          miniArtist.textContent = track.artist;
+          fsTitle.textContent = track.title;
+          fsArtist.textContent = track.artist;
+
+          if (track.thumbnail) {
+            miniThumb.src = track.thumbnail;
+            miniThumb.classList.remove('hidden');
+            miniThumbPlaceholder.classList.add('hidden');
+            fsThumb.src = track.thumbnail;
+            fsThumb.classList.remove('hidden');
+            fsThumbPlaceholder.classList.add('hidden');
+          }
+
+          updateLikeButtons(isLiked(track.id));
+          fetchLyrics(track);
+        }
+      }
+
+      updateQueueBadge();
+      renderQueueView();
+    }
+
+    async function initializeNativePlayback() {
+      try {
+        await nativeMusicPlayer.addListener('playbackState', snapshot => {
+          audio.applySnapshot(snapshot);
+          syncNativeTrack(snapshot);
+        });
+
+        await nativeMusicPlayer.addListener('playbackProgress', snapshot => {
+          audio.applySnapshot(snapshot);
+        });
+
+        await nativeMusicPlayer.addListener('trackChanged', snapshot => {
+          audio.applySnapshot(snapshot);
+          syncNativeTrack(snapshot);
+        });
+
+        await nativeMusicPlayer.addListener('playbackError', error => {
+          audio.emitError(error?.message || 'Native audio playback failed');
+        });
+
+        await syncNativePlaybackState();
+      } catch (error) {
+        console.error('Could not initialize native playback:', error);
+        alertToast('Native player could not initialize. Reinstall the updated APK.');
+      }
+    }
+
+    async function syncNativePlaybackState() {
+      if (!useNativePlayback) return;
+
+      try {
+        const queueState = await nativeMusicPlayer.getQueue();
+        if (Array.isArray(queueState.tracks)) {
+          state.queue = queueState.tracks.map(mapNativeTrack);
+          state.currentIndex = Number(queueState.currentMediaItemIndex ?? -1);
+          state.isShuffle = Boolean(queueState.shuffleEnabled);
+          state.repeatMode = queueState.repeatMode === 1 ? 'one'
+            : queueState.repeatMode === 2 ? 'all' : 'off';
+          updateQueueBadge();
+          renderQueueView();
+        }
+
+        const snapshot = await nativeMusicPlayer.getState();
+        audio.applySnapshot(snapshot);
+        syncNativeTrack(snapshot);
+      } catch (error) {
+        console.warn('Unable to restore native playback state:', error);
+      }
+    }
+
+    function nativeQueueItems() {
+      return state.queue.map(track => ({
+        id: String(track.id),
+        title: track.title || 'Unknown title',
+        artist: track.artist || 'Unknown artist',
+        album: 'ViMusic',
+        artworkUrl: track.thumbnail || '',
+        streamUrl: apiUrl('/api/stream/' + encodeURIComponent(track.id))
+      }));
+    }
+
     let parsedLyrics = [];
     let sleepTimerTimeout = null;
     let sleepTimerEndTimestamp = null;
@@ -997,7 +1233,11 @@
       loadDynamicQuickPicks();
       updateLibraryCounts();
       showLikedSongsView();
-      initMediaSession();
+      if (useNativePlayback) {
+        initializeNativePlayback();
+      } else {
+        initMediaSession();
+      }
 
       // Seek Bar
       seekBar.addEventListener('input', (e) => {
@@ -1015,6 +1255,13 @@
       volumeSlider.addEventListener('input', (e) => {
         audio.volume = parseFloat(e.target.value);
       });
+
+      if (useNativePlayback) {
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) syncNativePlaybackState();
+        });
+        window.addEventListener('focus', syncNativePlaybackState);
+      }
 
       // Search input enter
       document.getElementById('search-form').addEventListener('submit', (e) => {
@@ -1416,16 +1663,39 @@
       updateLikeButtons(isLiked(track.id));
       recordHistory(track);
 
-      // Cancel the old source before assigning the next one. The request ID makes
-      // the old source's AbortError harmless.
+      // Cancel the previous request before replacing the current item.
       audio.pause();
       setPlayingUI(false);
       audio.src = apiUrl(`/api/stream/${encodeURIComponent(track.id)}`);
       audio.load();
 
-      playAudioSafely(requestId, 'Playback start error');
+      if (useNativePlayback) {
+        activeNativeTrackId = track.id;
 
-      // Update MediaSession.
+        const tracks = nativeQueueItems();
+        const startIndex = Math.max(0, Math.min(state.currentIndex, tracks.length - 1));
+
+        nativeMusicPlayer.setQueue({
+          tracks,
+          startIndex,
+          positionMs: 0,
+          playWhenReady: false,
+          shuffleEnabled: state.isShuffle,
+          repeatMode: state.repeatMode
+        }).then(() => {
+          if (requestId !== playbackRequestId) return;
+          playAudioSafely(requestId, 'Native playback start error');
+        }).catch(error => {
+          if (requestId !== playbackRequestId) return;
+          console.error('Native queue setup failed:', error);
+          setPlayingUI(false);
+          alertToast('Could not load this track in the Android player.');
+        });
+      } else {
+        playAudioSafely(requestId, 'Playback start error');
+      }
+
+      // Browser MediaSession is only used on desktop. Android uses Media3.
       updateMediaSession(track);
 
       // Fetch synced lyrics and recommendations for this track.
@@ -1465,6 +1735,16 @@
     }
 
     function playNext() {
+      if (useNativePlayback) {
+        const isLastTrack = state.currentIndex >= state.queue.length - 1;
+        if (isLastTrack && state.autoplayRadio && state.repeatMode !== 'all' && state.queue.length > 0) {
+          fetchRadioRecommendations(state.queue[state.currentIndex], true);
+        } else {
+          nativeMusicPlayer.seekToNext().catch(error => console.warn('Native next failed:', error));
+        }
+        return;
+      }
+
       if (state.repeatMode === 'one') {
         audio.currentTime = 0;
         playAudioSafely(playbackRequestId, 'Repeat playback error');
@@ -1483,6 +1763,11 @@
     }
 
     function playPrevious() {
+      if (useNativePlayback) {
+        nativeMusicPlayer.seekToPrevious().catch(error => console.warn('Native previous failed:', error));
+        return;
+      }
+
       if (audio.currentTime > 4) {
         audio.currentTime = 0;
         return;
@@ -1498,8 +1783,12 @@
       const btn = document.getElementById('shuffle-btn');
       if (state.isShuffle) {
         btn.classList.add('text-red-500');
-        // Shuffle upcoming tracks in queue
-        if (state.queue.length > state.currentIndex + 1) {
+        if (useNativePlayback) {
+          nativeMusicPlayer.setShuffleEnabled({ enabled: true })
+            .catch(error => console.warn('Native shuffle failed:', error));
+        }
+        // Shuffle upcoming tracks in queue on browser playback.
+        if (!useNativePlayback && state.queue.length > state.currentIndex + 1) {
           const upcoming = state.queue.slice(state.currentIndex + 1);
           upcoming.sort(() => Math.random() - 0.5);
           state.queue = [...state.queue.slice(0, state.currentIndex + 1), ...upcoming];
@@ -1507,6 +1796,10 @@
         }
       } else {
         btn.classList.remove('text-red-500');
+        if (useNativePlayback) {
+          nativeMusicPlayer.setShuffleEnabled({ enabled: false })
+            .catch(error => console.warn('Native shuffle failed:', error));
+        }
       }
     }
 
@@ -1524,6 +1817,11 @@
         state.repeatMode = 'off';
         btn.classList.remove('text-red-500', 'text-red-400', 'font-black');
         btn.title = "Repeat Off";
+      }
+
+      if (useNativePlayback) {
+        nativeMusicPlayer.setRepeatMode({ repeatMode: state.repeatMode })
+          .catch(error => console.warn('Native repeat mode failed:', error));
       }
     }
 
@@ -1606,6 +1904,16 @@
           state.queue.push(...newTracks);
           updateQueueBadge();
 
+          if (useNativePlayback && !playImmediately) {
+            nativeMusicPlayer.appendToQueue({ tracks: newTracks.map(track => ({
+              id: String(track.id),
+              title: track.title || 'Unknown title',
+              artist: track.artist || 'Unknown artist',
+              artworkUrl: track.thumbnail || '',
+              streamUrl: apiUrl('/api/stream/' + encodeURIComponent(track.id))
+            })) }).catch(error => console.warn('Could not append radio tracks:', error));
+          }
+
           if (playImmediately && state.currentIndex + 1 < state.queue.length) {
             state.currentIndex++;
             loadAndPlay(state.queue[state.currentIndex]);
@@ -1624,6 +1932,17 @@
     function addToQueue(track) {
       state.queue.push(track);
       updateQueueBadge();
+
+      if (useNativePlayback) {
+        nativeMusicPlayer.appendToQueue({ tracks: [{
+          id: String(track.id),
+          title: track.title || 'Unknown title',
+          artist: track.artist || 'Unknown artist',
+          artworkUrl: track.thumbnail || '',
+          streamUrl: apiUrl('/api/stream/' + encodeURIComponent(track.id))
+        }] }).catch(error => console.warn('Could not append track to native queue:', error));
+      }
+
       alertToast(`Added "${track.title}" to queue`);
     }
 
@@ -1633,6 +1952,10 @@
       pauseAudio();
       audio.removeAttribute('src');
       audio.load();
+      if (useNativePlayback) {
+        nativeMusicPlayer.clearQueue().catch(error => console.warn('Could not clear native queue:', error));
+        activeNativeTrackId = null;
+      }
       updateQueueBadge();
       renderQueueView();
     }
@@ -2108,6 +2431,8 @@
 
     // MediaSession API Integration (Lockscreen controls)
     function initMediaSession() {
+      if (useNativePlayback) return;
+
       if ('mediaSession' in navigator) {
         navigator.mediaSession.setActionHandler('play', () => togglePlay());
         navigator.mediaSession.setActionHandler('pause', () => togglePlay());
@@ -2120,6 +2445,8 @@
     }
 
     function updateMediaSession(track) {
+      if (useNativePlayback) return;
+
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: track.title,
