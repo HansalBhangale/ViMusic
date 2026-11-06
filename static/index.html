@@ -86,27 +86,27 @@
   <audio id="audio-engine" preload="metadata"></audio>
 
   <!-- Top App Navigation Bar -->
-  <header class="border-b border-zinc-800/80 bg-zinc-950/70 backdrop-blur-xl sticky top-0 z-30 px-6 py-3.5">
+  <header class="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-30 px-4 py-2.5 md:px-6 md:py-3.5">
     <div class="max-w-7xl mx-auto flex items-center justify-between">
       
       <!-- Brand Logo -->
-      <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('explore')">
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-red-600 to-rose-500 flex items-center justify-center font-black text-white shadow-lg shadow-red-500/25">
-          <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+      <div class="flex items-center gap-2.5 cursor-pointer" onclick="switchTab('explore')">
+        <div class="w-8 h-8 md:w-9 md:h-9 rounded-xl bg-gradient-to-tr from-red-600 to-rose-500 flex items-center justify-center font-black text-white shadow-lg shadow-red-500/25 flex-shrink-0">
+          <svg class="w-4 h-4 md:w-5 md:h-5 fill-current" viewBox="0 0 24 24">
             <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
           </svg>
         </div>
-        <div>
+        <div class="flex flex-col">
           <div class="flex items-center gap-1.5">
             <h1 class="text-base font-extrabold tracking-tight">ViMusic</h1>
-            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 uppercase tracking-wide">Free</span>
+            <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-red-500/20 text-red-400 border border-red-500/30 uppercase tracking-wide">Free</span>
           </div>
-          <p class="text-[11px] text-zinc-400 font-medium">YouTube Audio & MP3 Engine</p>
+          <p class="text-[10px] text-zinc-400 font-medium hidden sm:block">YouTube Audio & MP3 Engine</p>
         </div>
       </div>
 
-      <!-- Main Navigation Tabs -->
-      <nav class="flex items-center gap-1 bg-zinc-900/80 border border-zinc-800/80 p-1 rounded-xl">
+      <!-- Main Navigation Tabs (Desktop Only) -->
+      <nav class="hidden md:flex items-center gap-1 bg-zinc-900/80 border border-zinc-800/80 p-1 rounded-xl">
         <button id="nav-explore" onclick="switchTab('explore')" class="nav-tab px-4 py-1.5 rounded-lg text-xs font-semibold transition-all bg-zinc-800 text-white shadow-sm flex items-center gap-1.5">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
           <span>Explore</span>
@@ -127,13 +127,13 @@
 
       <!-- Right Actions: Server Config, Sleep Timer & Status -->
       <div class="flex items-center gap-2">
-        <button onclick="openServerConfigModal()" id="server-btn" class="text-xs bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5" title="Cloud Server URL">
-          <svg class="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
-          <span id="server-label">Server</span>
+        <button onclick="openServerConfigModal()" id="server-btn" class="text-xs bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-2.5 py-1.5 md:px-3 md:py-1.5 rounded-xl transition flex items-center gap-1.5" title="Server Status & Config">
+          <span id="server-status-dot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+          <span id="server-label" class="hidden sm:inline">Server</span>
         </button>
-        <button onclick="openSleepTimerModal()" id="sleep-timer-btn" class="text-xs bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5" title="Sleep Timer">
+        <button onclick="openSleepTimerModal()" id="sleep-timer-btn" class="text-xs bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 px-2.5 py-1.5 md:px-3 md:py-1.5 rounded-xl transition flex items-center gap-1.5" title="Sleep Timer">
           <svg class="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          <span id="sleep-timer-label">Sleep Timer</span>
+          <span id="sleep-timer-label" class="hidden sm:inline">Sleep</span>
         </button>
       </div>
 
@@ -141,7 +141,21 @@
   </header>
 
   <!-- Main View Container -->
-  <main class="max-w-7xl w-full mx-auto p-6 flex-1 flex flex-col pb-32 z-10">
+  <main class="max-w-7xl w-full mx-auto px-4 py-4 md:p-6 flex-1 flex flex-col pb-36 md:pb-32 z-10">
+
+    <!-- Disconnected Alert Banner (Shown if backend ping fails) -->
+    <div id="offline-banner" class="hidden mb-4 bg-red-950/60 border border-red-500/40 rounded-2xl p-3 flex items-center justify-between shadow-lg">
+      <div class="flex items-center gap-2.5 min-w-0 pr-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0 animate-ping"></span>
+        <div class="min-w-0">
+          <p class="text-xs font-bold text-white truncate">Cannot reach ViMusic backend</p>
+          <p id="offline-banner-sub" class="text-[11px] text-zinc-400 truncate">Tap 'Connect' to configure server URL or local Wi-Fi IP</p>
+        </div>
+      </div>
+      <button onclick="openServerConfigModal()" class="bg-red-600 hover:bg-red-500 text-white text-xs font-semibold px-3 py-1.5 rounded-xl transition flex-shrink-0">
+        Connect
+      </button>
+    </div>
 
     <!-- 1. EXPLORE TAB -->
     <section id="tab-explore" class="tab-content flex flex-col gap-8">
@@ -396,11 +410,11 @@
   </main>
 
   <!-- BOTTOM FLOATING MINI PLAYER -->
-  <footer id="mini-player" class="fixed bottom-4 left-4 right-4 max-w-5xl mx-auto z-40 bg-zinc-950/90 border border-zinc-800/90 rounded-2xl p-3 shadow-2xl backdrop-blur-2xl flex flex-col gap-2">
+  <footer id="mini-player" class="fixed bottom-[60px] left-2 right-2 md:bottom-4 md:left-4 md:right-4 max-w-5xl mx-auto z-40 bg-zinc-950/95 border border-zinc-800/90 rounded-2xl p-2.5 md:p-3 shadow-2xl backdrop-blur-2xl flex flex-col gap-1.5 md:gap-2">
     
     <!-- Top Progress Scrub Line -->
     <div class="flex items-center gap-2 px-1">
-      <span id="current-time-label" class="text-[10px] font-mono text-zinc-400 w-8 text-right">0:00</span>
+      <span id="current-time-label" class="text-[9px] md:text-[10px] font-mono text-zinc-400 w-7 md:w-8 text-right">0:00</span>
       <input 
         type="range" 
         id="seek-bar" 
@@ -410,127 +424,143 @@
         step="0.1" 
         class="range-slider w-full h-1 cursor-pointer"
       />
-      <span id="duration-label" class="text-[10px] font-mono text-zinc-400 w-8">0:00</span>
+      <span id="duration-label" class="text-[9px] md:text-[10px] font-mono text-zinc-400 w-7 md:w-8">0:00</span>
     </div>
 
     <!-- Main Player Controls Row -->
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex items-center justify-between gap-2 md:gap-4">
       
       <!-- Track Thumbnail & Title (Click expands fullscreen) -->
-      <div class="flex items-center gap-3 flex-1 min-w-0 cursor-pointer" onclick="openFullscreenPlayer()">
-        <div class="relative w-12 h-12 rounded-xl overflow-hidden bg-zinc-900 flex-shrink-0 border border-zinc-800">
+      <div class="flex items-center gap-2.5 md:gap-3 flex-1 min-w-0 cursor-pointer" onclick="openFullscreenPlayer()">
+        <div class="relative w-10 h-10 md:w-12 md:h-12 rounded-xl overflow-hidden bg-zinc-900 flex-shrink-0 border border-zinc-800">
           <img id="mini-thumb" src="" alt="Album Art" class="w-full h-full object-cover hidden" />
           <div id="mini-thumb-placeholder" class="w-full h-full flex items-center justify-center text-zinc-600">
             <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
           </div>
         </div>
         <div class="min-w-0 flex-1">
-          <h4 id="mini-title" class="text-sm font-bold text-white truncate">Not Playing</h4>
-          <p id="mini-artist" class="text-xs text-zinc-400 truncate">Select a song to start</p>
+          <h4 id="mini-title" class="text-xs md:text-sm font-bold text-white truncate">Not Playing</h4>
+          <p id="mini-artist" class="text-[10px] md:text-xs text-zinc-400 truncate">Select a song to start</p>
         </div>
       </div>
 
-      <!-- Center Playback Controls -->
-      <div class="flex items-center gap-3">
+      <!-- Playback Controls -->
+      <div class="flex items-center gap-1 md:gap-3 flex-shrink-0">
         <!-- Like Button -->
-        <button id="mini-like-btn" onclick="toggleLikeCurrentTrack()" class="text-zinc-400 hover:text-red-500 transition p-2" title="Favorite">
-          <svg id="mini-like-icon" class="w-5 h-5 fill-none stroke-current stroke-2" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <button id="mini-like-btn" onclick="toggleLikeCurrentTrack()" class="text-zinc-400 hover:text-red-500 transition p-1.5 md:p-2" title="Favorite">
+          <svg id="mini-like-icon" class="w-4 h-4 md:w-5 md:h-5 fill-none stroke-current stroke-2" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
         </button>
 
-        <!-- Shuffle -->
-        <button id="shuffle-btn" onclick="toggleShuffle()" class="text-zinc-500 hover:text-white transition p-1.5" title="Shuffle">
+        <!-- Shuffle (Desktop only) -->
+        <button id="shuffle-btn" onclick="toggleShuffle()" class="hidden md:block text-zinc-500 hover:text-white transition p-1.5" title="Shuffle">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h4l4 6 4-6h4M4 20h4l4-6 4 6h4M16 4h4v4M16 20h4v-4"/></svg>
         </button>
 
-        <!-- Previous -->
-        <button onclick="playPrevious()" class="text-zinc-300 hover:text-white transition p-1.5" title="Previous">
+        <!-- Previous (Desktop only) -->
+        <button onclick="playPrevious()" class="hidden md:block text-zinc-300 hover:text-white transition p-1.5" title="Previous">
           <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
         </button>
 
         <!-- Play / Pause Main Button -->
-        <button id="main-play-btn" onclick="togglePlay()" class="w-10 h-10 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition shadow-lg shadow-red-600/30">
-          <svg id="play-icon" class="w-5 h-5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <svg id="pause-icon" class="w-5 h-5 fill-current hidden" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        <button id="main-play-btn" onclick="togglePlay()" class="w-9 h-9 md:w-10 md:h-10 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition shadow-lg shadow-red-600/30">
+          <svg id="play-icon" class="w-4 h-4 md:w-5 md:h-5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg id="pause-icon" class="w-4 h-4 md:w-5 md:h-5 fill-current hidden" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
         </button>
 
-        <!-- Next -->
+        <!-- Next (Visible on both mobile & desktop) -->
         <button onclick="playNext()" class="text-zinc-300 hover:text-white transition p-1.5" title="Next">
-          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+          <svg class="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
         </button>
 
-        <!-- Repeat -->
-        <button id="repeat-btn" onclick="toggleRepeat()" class="text-zinc-500 hover:text-white transition p-1.5" title="Repeat">
+        <!-- Repeat (Desktop only) -->
+        <button id="repeat-btn" onclick="toggleRepeat()" class="hidden md:block text-zinc-500 hover:text-white transition p-1.5" title="Repeat">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
       </div>
 
-      <!-- Right Utility Actions -->
-      <div class="flex items-center gap-2">
-        
-        <!-- Volume Slider -->
-        <div class="hidden sm:flex items-center gap-1.5">
+      <!-- Right Utility Actions (Desktop only) -->
+      <div class="hidden md:flex items-center gap-2">
+        <div class="flex items-center gap-1.5">
           <button onclick="toggleMute()" class="text-zinc-400 hover:text-white transition p-1">
             <svg id="vol-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
           </button>
           <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="1" class="range-slider w-16 h-1 cursor-pointer">
         </div>
 
-        <!-- Download MP3 -->
         <button id="mini-download-btn" onclick="downloadCurrentTrack()" class="text-zinc-400 hover:text-white p-2 rounded-lg hover:bg-zinc-800 transition" title="Download MP3 with ID3 Tags">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
         </button>
 
-        <!-- Expand Button -->
         <button onclick="openFullscreenPlayer()" class="text-zinc-400 hover:text-white p-2 rounded-lg hover:bg-zinc-800 transition" title="Fullscreen Player">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
         </button>
-
       </div>
 
     </div>
   </footer>
+
+  <!-- MOBILE BOTTOM NAVIGATION BAR -->
+  <nav id="mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 border-t border-zinc-800/90 backdrop-blur-xl px-2 py-1.5 flex items-center justify-around">
+    <button id="mob-nav-explore" onclick="switchTab('explore')" class="mob-tab-btn flex flex-col items-center justify-center flex-1 py-1 text-red-500 transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+      <span class="text-[10px] font-bold mt-0.5">Explore</span>
+    </button>
+    <button id="mob-nav-search" onclick="switchTab('search')" class="mob-tab-btn flex flex-col items-center justify-center flex-1 py-1 text-zinc-400 hover:text-white transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      <span class="text-[10px] font-medium mt-0.5">Search</span>
+    </button>
+    <button id="mob-nav-library" onclick="switchTab('library')" class="mob-tab-btn flex flex-col items-center justify-center flex-1 py-1 text-zinc-400 hover:text-white transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"/></svg>
+      <span class="text-[10px] font-medium mt-0.5">Library</span>
+    </button>
+    <button id="mob-nav-queue" onclick="switchTab('queue')" class="mob-tab-btn flex flex-col items-center justify-center flex-1 py-1 text-zinc-400 hover:text-white transition relative">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      <span id="mob-queue-badge" class="absolute top-0.5 right-6 w-3.5 h-3.5 bg-red-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center">0</span>
+      <span class="text-[10px] font-medium mt-0.5">Queue</span>
+    </button>
+  </nav>
 
   <!-- FULLSCREEN NOW PLAYING MODAL -->
   <div id="fullscreen-modal" class="fixed inset-0 z-50 bg-black/95 backdrop-blur-2xl hidden flex flex-col justify-between p-6 md:p-10 transition-all duration-300">
     
     <!-- Top Modal Bar -->
     <div class="flex items-center justify-between max-w-4xl w-full mx-auto">
-      <button onclick="closeFullscreenPlayer()" class="text-zinc-400 hover:text-white p-2.5 rounded-full hover:bg-zinc-800 transition">
+      <button onclick="closeFullscreenPlayer()" class="text-zinc-400 hover:text-white p-2 rounded-full hover:bg-zinc-800 transition">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
 
       <!-- Center Switcher: Cover vs Lyrics vs Queue vs Similar -->
-      <div class="flex items-center gap-1 bg-zinc-900 border border-zinc-800 p-1 rounded-xl">
-        <button id="fs-view-cover-btn" onclick="setFsView('cover')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 text-white transition">Cover</button>
-        <button id="fs-view-lyrics-btn" onclick="setFsView('lyrics')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white transition">Lyrics</button>
-        <button id="fs-view-queue-btn" onclick="setFsView('queue')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white transition">Queue</button>
-        <button id="fs-view-radio-btn" onclick="setFsView('radio')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white transition flex items-center gap-1">
-          <svg class="w-3.5 h-3.5 text-red-500 fill-current" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-          <span>Recommended</span>
+      <div class="flex items-center gap-0.5 sm:gap-1 bg-zinc-900 border border-zinc-800 p-0.5 sm:p-1 rounded-xl">
+        <button id="fs-view-cover-btn" onclick="setFsView('cover')" class="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold bg-zinc-800 text-white transition">Cover</button>
+        <button id="fs-view-lyrics-btn" onclick="setFsView('lyrics')" class="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold text-zinc-400 hover:text-white transition">Lyrics</button>
+        <button id="fs-view-queue-btn" onclick="setFsView('queue')" class="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold text-zinc-400 hover:text-white transition">Queue</button>
+        <button id="fs-view-radio-btn" onclick="setFsView('radio')" class="px-2 sm:px-3.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold text-zinc-400 hover:text-white transition flex items-center gap-1">
+          <svg class="w-3 h-3 sm:w-3.5 sm:h-3.5 text-red-500 fill-current" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+          <span class="hidden xs:inline sm:inline">Picks</span>
         </button>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1 sm:gap-2">
         <!-- Playback speed -->
-        <select id="fs-speed-select" onchange="setPlaybackRate(this.value)" class="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs px-2.5 py-1.5 rounded-xl outline-none">
+        <select id="fs-speed-select" onchange="setPlaybackRate(this.value)" class="bg-zinc-900 border border-zinc-800 text-zinc-300 text-[11px] sm:text-xs px-2 py-1 rounded-xl outline-none">
           <option value="0.75">0.75x</option>
           <option value="1.0" selected>1.0x</option>
           <option value="1.25">1.25x</option>
           <option value="1.5">1.5x</option>
           <option value="2.0">2.0x</option>
         </select>
-        <button onclick="openSleepTimerModal()" class="text-zinc-400 hover:text-white p-2 rounded-xl hover:bg-zinc-800 transition" title="Sleep Timer">
+        <button onclick="openSleepTimerModal()" class="text-zinc-400 hover:text-white p-1.5 sm:p-2 rounded-xl hover:bg-zinc-800 transition" title="Sleep Timer">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         </button>
       </div>
     </div>
 
     <!-- Center Content: Cover View OR Synced Lyrics View OR Queue View -->
-    <div class="flex-1 max-w-4xl w-full mx-auto my-6 flex items-center justify-center overflow-hidden">
+    <div class="flex-1 max-w-4xl w-full mx-auto my-3 sm:my-6 flex items-center justify-center overflow-hidden">
       
       <!-- View A: Big Cover Art -->
       <div id="fs-cover-view" class="flex flex-col items-center justify-center w-full">
-        <div class="relative w-72 h-72 sm:w-84 sm:h-84 md:w-96 md:h-96 rounded-3xl overflow-hidden shadow-2xl shadow-red-900/20 border border-zinc-800/80 bg-zinc-900">
+        <div class="relative w-60 h-60 sm:w-72 sm:h-72 md:w-96 md:h-96 rounded-3xl overflow-hidden shadow-2xl shadow-red-900/20 border border-zinc-800/80 bg-zinc-900">
           <img id="fs-thumb" src="" alt="Album Artwork" class="w-full h-full object-cover hidden" />
           <div id="fs-thumb-placeholder" class="w-full h-full flex items-center justify-center text-zinc-700">
             <svg class="w-20 h-20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
@@ -661,29 +691,52 @@
   </div>
 
   <!-- SERVER CONFIG MODAL -->
-  <div id="server-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 max-w-md w-full flex flex-col gap-4 shadow-2xl">
+  <div id="server-modal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 sm:p-6 max-w-md w-full flex flex-col gap-4 shadow-2xl">
       <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-xl bg-red-600/20 text-red-400 flex items-center justify-center">
+        <div class="w-9 h-9 rounded-xl bg-red-600/20 text-red-400 flex items-center justify-center flex-shrink-0">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
         </div>
         <div>
-          <h3 class="text-base font-bold text-white">Backend Server URL</h3>
-          <p class="text-xs text-zinc-400">Configure your cloud or local streaming engine</p>
+          <h3 class="text-base font-bold text-white">ViMusic Server Connection</h3>
+          <p class="text-[11px] text-zinc-400">Configure your cloud or laptop streaming server</p>
         </div>
       </div>
       
-      <div class="flex flex-col gap-1.5">
+      <div class="flex flex-col gap-2">
         <label class="text-xs font-semibold text-zinc-300">Server API URL</label>
-        <input type="text" id="server-url-input" placeholder="e.g. https://my-vimusic.onrender.com or http://10.208.66.48:8000" class="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-red-500">
-        <p class="text-[11px] text-zinc-500">For Native Android APK: Enter your free Render/Railway URL or local Wi-Fi IP so the phone can reach the engine.</p>
+        <div class="flex gap-2">
+          <input type="text" id="server-url-input" placeholder="http://10.208.66.48:8000 or https://xxx.onrender.com" class="flex-1 min-w-0 bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-red-500">
+          <button id="test-conn-btn" onclick="testServerConnection()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs px-3 py-2 rounded-xl transition flex items-center gap-1.5 flex-shrink-0 font-medium">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            <span>Test</span>
+          </button>
+        </div>
+
+        <!-- Connection Test Result Banner -->
+        <div id="test-conn-result" class="hidden p-3 rounded-xl text-xs flex flex-col gap-1 transition"></div>
+
+        <div class="flex items-center justify-between text-[11px] text-zinc-400 mt-1">
+          <span>Quick Presets:</span>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="setServerInputPreset('http://10.208.66.48:8000')" class="text-[10px] bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 px-2.5 py-1 rounded-lg transition border border-zinc-700/60">
+            Wi-Fi (10.208.66.48:8000)
+          </button>
+          <button onclick="setServerInputPreset('cloud')" class="text-[10px] bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 px-2.5 py-1 rounded-lg transition border border-zinc-700/60">
+            Render Cloud URL
+          </button>
+        </div>
+        <p class="text-[11px] text-zinc-500 mt-1">
+          💡 If connecting to your laptop over Wi-Fi, run <b>allow_firewall.bat</b> on your laptop as Administrator once to unblock Port 8000.
+        </p>
       </div>
 
-      <div class="flex justify-between items-center mt-2">
+      <div class="flex justify-between items-center mt-2 pt-3 border-t border-zinc-800">
         <button onclick="resetServerUrl()" class="text-xs text-zinc-500 hover:text-zinc-300">Reset Default</button>
         <div class="flex gap-2">
           <button onclick="closeServerConfigModal()" class="px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-white">Cancel</button>
-          <button onclick="saveServerUrl()" class="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs px-5 py-2 rounded-xl transition">Save & Connect</button>
+          <button onclick="saveServerUrl()" class="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs px-5 py-2 rounded-xl transition shadow-lg shadow-red-600/30">Save & Connect</button>
         </div>
       </div>
     </div>
@@ -721,12 +774,35 @@
     const fsLyricsScroll = document.getElementById('fs-lyrics-scroll');
 
     // Dynamic API URL for Web, Mobile, and Cloud Backends
+    function normalizeServerUrl(url) {
+      if (!url) return '';
+      url = url.trim().replace(/\/+$/, '');
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        if (url.includes('.onrender.com') || url.includes('.up.railway.app') || url.includes('.vercel.app')) {
+          url = 'https://' + url;
+        } else {
+          url = 'http://' + url;
+        }
+      }
+      return url;
+    }
+
     function getApiBaseUrl() {
       const custom = localStorage.getItem('vimusic_custom_server');
-      if (custom && custom.trim()) return custom.trim().replace(/\/$/, '');
-      if (window.location.protocol.startsWith('http') && !window.location.origin.includes('capacitor:')) {
-        return window.location.origin;
+      if (custom && custom.trim()) {
+        return normalizeServerUrl(custom);
       }
+
+      // Check if running on desktop browser connecting directly to python server
+      const origin = window.location.origin;
+      const isLocalCapacitor = origin.includes('localhost') && (!window.location.port || window.location.port === '80' || window.location.port === '443');
+      const isCapacitorScheme = origin.startsWith('capacitor:') || origin.startsWith('file:') || origin.includes('ionic:');
+
+      if (!isLocalCapacitor && !isCapacitorScheme && window.location.protocol.startsWith('http') && window.location.port === '8000') {
+        return origin;
+      }
+
+      // Default fallback for Android APK
       return 'http://10.208.66.48:8000';
     }
 
@@ -736,30 +812,161 @@
       return `${base}${p}`;
     }
 
+    // Server Config Modal & Diagnostics
     function openServerConfigModal() {
-      document.getElementById('server-modal').classList.remove('hidden');
-      document.getElementById('server-url-input').value = localStorage.getItem('vimusic_custom_server') || '';
+      const modal = document.getElementById('server-modal');
+      const input = document.getElementById('server-url-input');
+      const resultBox = document.getElementById('test-conn-result');
+      resultBox.classList.add('hidden');
+      resultBox.innerHTML = '';
+      input.value = localStorage.getItem('vimusic_custom_server') || getApiBaseUrl();
+      modal.classList.remove('hidden');
     }
+
     function closeServerConfigModal() {
       document.getElementById('server-modal').classList.add('hidden');
     }
+
+    function setServerInputPreset(val) {
+      const input = document.getElementById('server-url-input');
+      if (val === 'cloud') {
+        input.value = 'https://vimusic-streamer.onrender.com';
+      } else {
+        input.value = val;
+      }
+      testServerConnection();
+    }
+
+    async function testServerConnection() {
+      const input = document.getElementById('server-url-input');
+      const btn = document.getElementById('test-conn-btn');
+      const resultBox = document.getElementById('test-conn-result');
+      const rawVal = input.value.trim();
+      const cleanUrl = normalizeServerUrl(rawVal);
+      input.value = cleanUrl;
+
+      if (!cleanUrl) {
+        resultBox.className = "p-3 rounded-xl text-xs bg-red-950/70 border border-red-500/40 text-red-300";
+        resultBox.textContent = "Please enter a valid server URL or IP address.";
+        resultBox.classList.remove('hidden');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = `<svg class="animate-spin h-3.5 w-3.5 text-zinc-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> <span>Testing...</span>`;
+      resultBox.classList.add('hidden');
+
+      const startTime = performance.now();
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+        const res = await fetch(`${cleanUrl}/api/health`, {
+          signal: controller.signal,
+          mode: 'cors'
+        });
+        clearTimeout(timeoutId);
+
+        const latency = Math.round(performance.now() - startTime);
+        if (res.ok) {
+          const data = await res.json();
+          resultBox.className = "p-3 rounded-xl text-xs bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 flex flex-col gap-1";
+          resultBox.innerHTML = `
+            <div class="flex items-center gap-1.5 font-bold">
+              <span>✅ Server Reachable!</span>
+              <span class="text-[10px] px-1.5 py-0.5 bg-emerald-500/20 rounded font-mono">${latency}ms</span>
+            </div>
+            <p class="text-[11px] text-emerald-200">Connected to ViMusic backend engine (${data.engine || 'ready'}).</p>
+          `;
+          updateServerIndicator(true);
+        } else {
+          throw new Error(`HTTP ${res.status} returned`);
+        }
+      } catch (err) {
+        const isLocal = cleanUrl.includes('10.') || cleanUrl.includes('192.168.') || cleanUrl.includes('localhost');
+        resultBox.className = "p-3 rounded-xl text-xs bg-red-950/70 border border-red-500/40 text-red-300 flex flex-col gap-1.5";
+        resultBox.innerHTML = `
+          <div class="font-bold flex items-center gap-1.5">
+            <span>❌ Connection Failed</span>
+            <span class="text-[10px] text-zinc-400">(${err.name === 'AbortError' ? 'Timed out' : err.message})</span>
+          </div>
+          <div class="text-[11px] text-zinc-300 flex flex-col gap-1 mt-0.5">
+            ${isLocal ? `
+              <p>• <b>Windows Firewall:</b> Windows Defender blocks incoming port 8000. Double-click <b>allow_firewall.bat</b> on your laptop as Administrator to allow port 8000.</p>
+              <p>• Make sure phone and laptop are connected to the exact same Wi-Fi.</p>
+            ` : `
+              <p>• Free Render instances take 45-60s to wake up on first ping. Wait a moment and retry.</p>
+              <p>• Verify the URL matches your Render deployment.</p>
+            `}
+          </div>
+        `;
+        updateServerIndicator(false);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> <span>Test</span>`;
+        resultBox.classList.remove('hidden');
+      }
+    }
+
     function saveServerUrl() {
-      const val = document.getElementById('server-url-input').value.trim();
+      const input = document.getElementById('server-url-input');
+      const val = normalizeServerUrl(input.value.trim());
       if (val) {
         localStorage.setItem('vimusic_custom_server', val);
       } else {
         localStorage.removeItem('vimusic_custom_server');
       }
       closeServerConfigModal();
-      alertToast('Server URL updated! Reloading...');
-      setTimeout(() => location.reload(), 600);
+      alertToast('Server URL saved! Connecting...');
+      checkServerHealth();
+      loadDynamicQuickPicks();
     }
+
     function resetServerUrl() {
       localStorage.removeItem('vimusic_custom_server');
       document.getElementById('server-url-input').value = '';
       closeServerConfigModal();
-      alertToast('Server URL reset to default!');
-      setTimeout(() => location.reload(), 600);
+      alertToast('Reset to default IP!');
+      checkServerHealth();
+      loadDynamicQuickPicks();
+    }
+
+    function updateServerIndicator(online) {
+      const dot = document.getElementById('server-status-dot');
+      const banner = document.getElementById('offline-banner');
+      if (online) {
+        if (dot) {
+          dot.className = "w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]";
+        }
+        if (banner) banner.classList.add('hidden');
+      } else {
+        if (dot) {
+          dot.className = "w-2 h-2 rounded-full bg-red-500 animate-pulse";
+        }
+        if (banner) {
+          banner.classList.remove('hidden');
+          const sub = document.getElementById('offline-banner-sub');
+          if (sub) sub.textContent = `Server at ${getApiBaseUrl()} is unreachable.`;
+        }
+      }
+    }
+
+    async function checkServerHealth() {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(apiUrl('/api/health'), { signal: controller.signal });
+        clearTimeout(timeout);
+        if (res.ok) {
+          updateServerIndicator(true);
+          return true;
+        }
+      } catch (e) {
+        updateServerIndicator(false);
+        return false;
+      }
+      updateServerIndicator(false);
+      return false;
     }
 
     // Storage state
@@ -782,6 +989,7 @@
 
     // Initialization
     window.addEventListener('DOMContentLoaded', () => {
+      checkServerHealth();
       loadDynamicQuickPicks();
       updateLibraryCounts();
       showLikedSongsView();
@@ -812,20 +1020,44 @@
       });
     });
 
-    // Tab Switching
+    // Tab Switching (Synchronized for Desktop & Mobile Bottom Nav)
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+
+      // Desktop nav tab styling
       document.querySelectorAll('.nav-tab').forEach(el => {
         el.classList.remove('bg-zinc-800', 'text-white', 'shadow-sm');
         el.classList.add('text-zinc-400');
       });
 
+      // Mobile bottom nav tab styling
+      document.querySelectorAll('.mob-tab-btn').forEach(el => {
+        el.classList.remove('text-red-500');
+        el.classList.add('text-zinc-400');
+        const span = el.querySelector('span');
+        if (span) {
+          span.classList.remove('font-bold');
+          span.classList.add('font-medium');
+        }
+      });
+
       const activeSection = document.getElementById(`tab-${tabId}`);
       const activeNav = document.getElementById(`nav-${tabId}`);
+      const activeMobNav = document.getElementById(`mob-nav-${tabId}`);
+
       if (activeSection) activeSection.classList.remove('hidden');
       if (activeNav) {
         activeNav.classList.add('bg-zinc-800', 'text-white', 'shadow-sm');
         activeNav.classList.remove('text-zinc-400');
+      }
+      if (activeMobNav) {
+        activeMobNav.classList.add('text-red-500');
+        activeMobNav.classList.remove('text-zinc-400');
+        const span = activeMobNav.querySelector('span');
+        if (span) {
+          span.classList.add('font-bold');
+          span.classList.remove('font-medium');
+        }
       }
 
       if (tabId === 'queue') renderQueueView();
@@ -950,7 +1182,31 @@
           playTrack(tracks[0]);
         }
       } catch (err) {
-        list.innerHTML = `<div class="text-center py-20 text-red-400 text-sm">Search failed: ${err.message}</div>`;
+        const targetUrl = apiUrl('/api/search');
+        list.innerHTML = `
+          <div class="bg-red-950/40 border border-red-500/30 rounded-2xl p-6 text-center max-w-md mx-auto my-6 flex flex-col items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            </div>
+            <h4 class="text-sm font-bold text-white">Search Connection Failed</h4>
+            <p class="text-xs text-zinc-300">Could not reach backend engine at:</p>
+            <code class="text-[11px] bg-zinc-900 border border-zinc-700/80 px-2.5 py-1 rounded text-red-300 break-all max-w-full">${targetUrl}</code>
+            <div class="text-[11px] text-zinc-400 text-left bg-zinc-950/80 border border-zinc-800 p-3 rounded-xl w-full flex flex-col gap-1 mt-1">
+              <p class="font-semibold text-zinc-300">How to Fix:</p>
+              <p>• <b>Laptop Wi-Fi:</b> Windows Firewall blocks port 8000. Double-click <b>allow_firewall.bat</b> on your laptop as Administrator.</p>
+              <p>• <b>Render Cloud:</b> Free instances take ~45s to wake up on first search.</p>
+              <p>• Make sure phone and laptop are connected to the same Wi-Fi.</p>
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+              <button onclick="openServerConfigModal()" class="bg-red-600 hover:bg-red-500 text-white font-semibold text-xs px-4 py-2 rounded-xl transition shadow-lg shadow-red-600/30">
+                Server Settings & Test
+              </button>
+              <button onclick="runSearch('${query.replace(/'/g, "\\'")}')" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs px-4 py-2 rounded-xl transition">
+                Retry
+              </button>
+            </div>
+          </div>
+        `;
         count.textContent = '0 found';
       }
     }
@@ -1293,7 +1549,10 @@
 
     function updateQueueBadge() {
       const badge = document.getElementById('queue-badge');
-      badge.textContent = state.queue.length;
+      const mobBadge = document.getElementById('mob-queue-badge');
+      const count = state.queue.length;
+      if (badge) badge.textContent = count;
+      if (mobBadge) mobBadge.textContent = count;
     }
 
     function renderQueueView() {
