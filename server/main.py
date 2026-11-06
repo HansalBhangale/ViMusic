@@ -77,6 +77,7 @@ trending_cache = {"expires": 0, "tracks": []}
 BASE_OPTS = {
     'quiet': True,
     'no_warnings': True,
+    'verbose': True,  # Enable filtered yt-dlp debug messages
     'logger': QuietLogger(),
     'socket_timeout': 5,
     'js_runtimes': {'node': {}},
