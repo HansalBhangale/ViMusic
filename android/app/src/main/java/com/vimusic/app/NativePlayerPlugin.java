@@ -323,14 +323,18 @@ public final class NativePlayerPlugin extends Plugin implements Player.Listener 
 
     @Override protected void handleOnDestroy() {
         mainHandler.removeCallbacks(progressTicker);
-        if (controller != null) {
+        if (controllerFuture != null) {
+            if (controller != null) {
+                controller.removeListener(this);
+            }
+            // The future owns the controller instance; release it exactly once.
+            MediaController.releaseFuture(controllerFuture);
+            controllerFuture = null;
+            controller = null;
+        } else if (controller != null) {
             controller.removeListener(this);
             controller.release();
             controller = null;
-        }
-        if (controllerFuture != null) {
-            MediaController.releaseFuture(controllerFuture);
-            controllerFuture = null;
         }
         super.handleOnDestroy();
     }
