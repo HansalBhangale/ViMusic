@@ -860,6 +860,8 @@
       }
 
       emitError(message) {
+        this._paused = true;
+        this._isActuallyPlaying = false;
         this.error = { code: 2, message: String(message || 'Native audio playback failed') };
         this.dispatchEvent(new Event('error'));
       }
