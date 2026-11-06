@@ -85,7 +85,7 @@ def health():
     return {
         "status": "ok",
         "engine": "vimusic-yt-streamer",
-        "version": "2.2-cloud-resilient",
+        "version": "2.3-cloud-resilient",
         "has_cookies": bool(COOKIES_FILE)
     }
 
@@ -255,8 +255,7 @@ def get_stream_url(video_id: str):
             'logger': QuietLogger(),
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['visionos'],
-                    'player_skip': ['webpage']
+                    'player_client': ['visionos']
                 }
             }
         },
@@ -269,8 +268,7 @@ def get_stream_url(video_id: str):
             'logger': QuietLogger(),
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['visionos', 'android'],
-                    'player_skip': ['webpage']
+                    'player_client': ['visionos', 'android']
                 }
             }
         },
@@ -283,8 +281,7 @@ def get_stream_url(video_id: str):
             'logger': QuietLogger(),
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'tv_downgraded', 'mweb'],
-                    'player_skip': ['webpage']
+                    'player_client': ['android', 'tv_downgraded', 'mweb']
                 }
             }
         },
