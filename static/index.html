@@ -747,7 +747,9 @@
     // Audio engine & DOM elements.
     // Android uses the native Media3 player; desktop browsers keep HTMLAudioElement.
     const htmlAudio = document.getElementById('audio-engine');
-    const nativeMusicPlayer = window.Capacitor?.Plugins?.NativeMusicPlayer || null;
+    const nativeMusicPlayer = window.Capacitor?.registerPlugin?.('NativeMusicPlayer')
+      || window.Capacitor?.Plugins?.NativeMusicPlayer
+      || null;
     const useNativePlayback = Boolean(
       nativeMusicPlayer &&
       window.Capacitor?.getPlatform?.() === 'android'
@@ -766,6 +768,7 @@
         this._seeking = false;
         this.error = null;
         this._lastPlaybackState = 0;
+        this._isActuallyPlaying = false;
       }
 
       get src() { return this._src; }
@@ -832,17 +835,19 @@
       applySnapshot(snapshot) {
         if (!snapshot) return;
 
-        const wasPaused = this._paused;
         const wasEnded = this._lastPlaybackState === 4;
+        const isActuallyPlaying = Boolean(snapshot.isPlaying);
 
         this._paused = !snapshot.playWhenReady;
         this._currentTime = Math.max(0, Number(snapshot.currentPosition) || 0) / 1000;
         this._duration = Math.max(0, Number(snapshot.duration) || 0) / 1000;
         this._lastPlaybackState = Number(snapshot.playbackState) || 0;
 
-        if (snapshot.isPlaying && (wasPaused || !wasEnded)) {
+        // Only emit state transitions. Progress events arrive twice per second;
+        // dispatching "playing" on every tick would constantly reset UI listeners.
+        if (isActuallyPlaying && !this._isActuallyPlaying) {
           this.dispatchEvent(new Event('playing'));
-        } else if (this._paused && !wasPaused) {
+        } else if (!isActuallyPlaying && this._isActuallyPlaying) {
           this.dispatchEvent(new Event('pause'));
         }
 
@@ -850,6 +855,7 @@
           this.dispatchEvent(new Event('ended'));
         }
 
+        this._isActuallyPlaying = isActuallyPlaying;
         this.dispatchEvent(new Event('timeupdate'));
       }
 
