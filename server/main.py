@@ -58,7 +58,7 @@ async def serve_index():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "engine": "vimusic-yt-streamer"}
+    return {"status": "ok", "engine": "vimusic-yt-streamer", "version": "2.1-bot-bypass"}
 
 @app.get("/api/search")
 async def search(q: str, limit: int = 35):
